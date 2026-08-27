@@ -64,6 +64,8 @@ body {
   line-height: 1.5;
   min-height: 100dvh;
   -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .kana-font {
   font-family: "Hiragino Sans", "Yu Gothic UI", "Meiryo", "Noto Sans JP", system-ui, sans-serif;
@@ -606,6 +608,11 @@ const NEW_COOLDOWN = 8;
 // that a run of easy answers still feels like a drill.
 const READ_HOLD = 550;
 
+// The silence a newly introduced character gets before it is spoken. Without
+// it the introduction lands on the heels of the sound the last answer earned,
+// and the two run together as one noise.
+const INTRO_PAUSE = 500;
+
 // A session has no natural end — the filler pass can serve questions forever
 // — so it is cut into rounds: every ROUND_LEN resolved questions the drill
 // pauses at a checkpoint and asks whether to keep going.
@@ -664,7 +671,7 @@ function decayCard(c, now) {
 // Shown at the foot of the home screen so a phone can tell whether the newest
 // build has actually landed. Bump on every release, together with the CACHE
 // name in sw.js.
-const APP_VERSION = "v6";
+const APP_VERSION = "v7";
 
 const STORE_KEY = "yomikana-v1";
 const LEGACY_KEY = "hiragana-v1";  // the pre-rename store, no longer read
@@ -1226,9 +1233,20 @@ function renderQuestion(isNew) {
   });
   if (!read) document.getElementById("prompt").addEventListener("click", () => speak(kanaOf(S.current)));
   S.shownAt = performance.now();
-  // a brand-new character in the reading direction is shown with its answer
-  // marked, so speaking it gives nothing away
-  if (!read || isNew) speak(kanaOf(correct));
+  if (!read) {
+    // the sound direction's prompt is the sound, and it has to be spoken inside
+    // the click that asked for it or Chrome on Android drops it
+    speak(kanaOf(correct));
+  } else if (isNew) {
+    // a brand-new character in the reading direction is shown with its answer
+    // already marked, so speaking it gives nothing away — but it waits out a
+    // beat of silence first, and only if the question is still the one that
+    // asked for it
+    const say = kanaOf(correct);
+    setTimeout(() => {
+      if (S && S.phase === "question" && S.current === correct) speak(say);
+    }, INTRO_PAUSE);
+  }
 }
 
 function answer(btn) {
