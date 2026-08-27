@@ -149,6 +149,10 @@ button:focus-visible, a:focus-visible {
 }
 .script-switch .native { font-size: 1rem; font-weight: 500; letter-spacing: .02em; }
 .script-switch button[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+/* the direction switch borrows the script switch's frame, just tighter */
+.dir-switch { margin-top: -.375rem; }
+.dir-switch button { min-height: 2.125rem; font-size: .9rem; letter-spacing: .06em; gap: .3rem; }
+.dir-switch .native { font-size: .95rem; }
 
 /* Four rows of two, sized off the viewport so the whole deck lands on one
    screen: a small phone loses tile height, never a row. The 17rem is
@@ -188,14 +192,14 @@ button:focus-visible, a:focus-visible {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: .625rem;
-  grid-auto-rows: clamp(3.5rem, calc((100dvh - 17rem) / 4), 7.5rem);
+  grid-auto-rows: clamp(3.5rem, calc((100dvh - 20rem) / 4), 7.5rem);
   list-style: none;
 }
 /* with the refresh strip showing, the rows give up its height and the gap
    under it -- measured at 5.07rem together -- so the deck still lands on one
    screen. The floor drops a little too: on a short phone the strip is worth
    more than the last quarter-rem of tile height. */
-#home.has-refresh .groups { grid-auto-rows: clamp(3.25rem, calc((100dvh - 22rem) / 4), 7.5rem); }
+#home.has-refresh .groups { grid-auto-rows: clamp(3.25rem, calc((100dvh - 25rem) / 4), 7.5rem); }
 .group-card {
   width: 100%;
   height: 100%;
@@ -245,6 +249,7 @@ button:focus-visible, a:focus-visible {
 .group-bar > i { display: block; height: 100%; background: var(--indigo); border-radius: 999px; transition: width .3s; }
 .group-card.full .group-bar > i { background: var(--good); }
 .home-foot { margin-top: auto; padding-top: .75rem; font-size: .8rem; color: var(--muted); text-align: center; }
+.app-version { margin-top: .25rem; font-size: .65rem; color: var(--muted); opacity: .55; }
 /* one fixed-height slot holds the button, the confirmation and the receipt in
    turn, so swapping between them never shifts the page under a thumb */
 .reset-zone { margin-top: .75rem; min-height: 2.75rem; display: grid; place-items: center; }
@@ -296,6 +301,7 @@ button:focus-visible, a:focus-visible {
   font-weight: 500;
   animation: kanaIn .2s ease-out;
 }
+.kana-big.two { font-size: clamp(3.25rem, 17vw, 5rem); }
 @keyframes kanaIn { from { opacity: 0; transform: scale(.96); } }
 
 /* the reading is the prompt; the kana are the four answers */
@@ -366,11 +372,13 @@ button:focus-visible, a:focus-visible {
   position: relative;
 }
 .answer.two { font-size: clamp(2rem, 13vw, 4.5rem); }
+.answer.roman { font-size: clamp(1.4rem, 8vw, 2.2rem); font-weight: 650; letter-spacing: .04em; }
 /* scale the kana against the answer grid itself rather than the viewport,
    so the tiles stay right once the 30rem container stops growing */
 @supports (font-size: 1cqw) {
   .answer { font-size: 28cqw; }
   .answer.two { font-size: 17cqw; }
+  .answer.roman { font-size: 9cqw; }
 }
 .answer:hover:not(:disabled) { border-color: var(--indigo); }
 .answer:active:not(:disabled) { transform: scale(.98); }
@@ -482,6 +490,10 @@ button:focus-visible, a:focus-visible {
     <button role="tab" data-script="hira" aria-selected="true"><span class="native kana-font">ひらがな</span>Hiragana</button>
     <button role="tab" data-script="kata" aria-selected="false"><span class="native kana-font">カタカナ</span>Katakana</button>
   </div>
+  <div class="script-switch dir-switch" role="tablist" aria-label="Question direction">
+    <button role="tab" data-dir="sound" id="dirSound" aria-label="Hear a sound, pick the character"></button>
+    <button role="tab" data-dir="read" id="dirRead" aria-label="See a character, pick the reading"></button>
+  </div>
   <button id="refreshCard" class="refresh-card hidden">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
     <span class="refresh-title">Refresh<span class="refresh-count mono"></span></span>
@@ -499,6 +511,7 @@ button:focus-visible, a:focus-visible {
       </div>
       <p id="resetDone" class="reset-done hidden" role="status">Progress erased.</p>
     </div>
+    <div id="appVersion" class="app-version" aria-hidden="true"></div>
   </div>
 </main>
 
@@ -578,7 +591,12 @@ const LEARNED_AT = MAX_LEVEL - 2;
 // learned — you end up juggling seven half-known characters instead of four.
 const NEW_AFTER_LEVEL = 3;
 const WORKING_SET = 4;
-const NEW_COOLDOWN = 6;
+const NEW_COOLDOWN = 8;
+
+// A session has no natural end — the filler pass can serve questions forever
+// — so it is cut into rounds: every ROUND_LEN resolved questions the drill
+// pauses at a checkpoint and asks whether to keep going.
+const ROUND_LEN = 20;
 
 // Levels also fade with wall-clock time, not only with questions asked. The
 // waits above are counted in questions, so they stop the moment the tab is
@@ -630,6 +648,11 @@ function decayCard(c, now) {
   return dropped;
 }
 
+// Shown at the foot of the home screen so a phone can tell whether the newest
+// build has actually landed. Bump on every release, together with the CACHE
+// name in sw.js.
+const APP_VERSION = "v4";
+
 const STORE_KEY = "yomikana-v1";
 const LEGACY_KEY = "hiragana-v1";  // the pre-rename store, no longer read
 
@@ -651,9 +674,22 @@ for (const bag of [store.groups, store.fails]) {
     if (k.indexOf(":") === -1) { bag["hira:" + k] = bag[k]; delete bag[k]; }
   }
 }
+// and decks saved before directions existed all drilled sound → kana
+for (const bag of [store.groups, store.fails]) {
+  for (const k of Object.keys(bag)) {
+    const m = /^(hira|kata):(?!sound:|read:)(.+)$/.exec(k);
+    if (m) { bag[m[1] + ":sound:" + m[2]] = bag[k]; delete bag[k]; }
+  }
+}
 let script = store.settings.script === "kata" ? "kata" : "hira";
+// Which way the questions run: "sound" hears a reading and picks the kana,
+// "read" sees the kana and picks the reading. Recognizing a character and
+// recalling its reading are separate skills, so each direction keeps its own
+// levels, misses and fails under its own store keys.
+let dir = store.settings.dir === "read" ? "read" : "sound";
 let GROUPS = SCRIPTS[script].groups;
-function groupKey(gi) { return script + ":" + GROUPS[gi].name; }
+function groupKey(gi) { return script + ":" + dir + ":" + GROUPS[gi].name; }
+function reviewKey() { return script + ":" + dir + ":review"; }
 function saveStore() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) { /* private mode etc. */ }
 }
@@ -814,13 +850,19 @@ function renderHome() {
 }
 
 /* ---------- script switch ---------- */
-const scriptBtns = [...document.querySelectorAll(".script-switch button")];
+const scriptBtns = [...document.querySelectorAll(".script-switch:not(.dir-switch) button")];
 function applyScript() {
-  document.getElementById("brandSeal").textContent = SCRIPTS[script].seal;
+  const seal = SCRIPTS[script].seal;
+  document.getElementById("brandSeal").textContent = seal;
   scriptBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.script === script)));
+  // the direction labels borrow the script's seal, so they flip with it
+  document.getElementById("dirSound").innerHTML =
+    'a → <span class="native kana-font">' + seal + "</span>";
+  document.getElementById("dirRead").innerHTML =
+    '<span class="native kana-font">' + seal + "</span> → a";
 }
 scriptBtns.forEach(b => b.addEventListener("click", () => {
-  if (b.dataset.script === script) return;
+  if (!b.dataset.script || b.dataset.script === script) return;
   script = b.dataset.script;
   GROUPS = SCRIPTS[script].groups;
   store.settings.script = script;
@@ -830,6 +872,21 @@ scriptBtns.forEach(b => b.addEventListener("click", () => {
   showReset("button");
 }));
 applyScript();
+
+const dirBtns = [...document.querySelectorAll(".dir-switch button")];
+function applyDir() {
+  dirBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.dir === dir)));
+}
+dirBtns.forEach(b => b.addEventListener("click", () => {
+  if (!b.dataset.dir || b.dataset.dir === dir) return;
+  dir = b.dataset.dir;
+  store.settings.dir = dir;
+  saveStore();
+  applyDir();
+  renderHome();
+  showReset("button");
+}));
+applyDir();
 
 /* ---------- reset ---------- */
 // Two taps rather than a confirm() dialog: this wipes every group, and a modal
@@ -881,17 +938,19 @@ function startSession(gi) {
     gi,
     deck,
     cards: deck.map(e => e.refs[0]),
-    failKey: review ? script + ":review" : groupKey(gi),
+    failKey: review ? reviewKey() : groupKey(gi),
     forced: -1,           // index to re-ask immediately after a miss; -1 = none
     lastKnown: false,     // true right after a filler question of a mastered card
     current: -1,
     failed: false,        // wrong answer given on the current display
-    fails: store.fails[review ? script + ":review" : groupKey(gi)] || 0,
+    fails: store.fails[review ? reviewKey() : groupKey(gi)] || 0,
     sinceNew: NEW_COOLDOWN,  // questions since the last new character
     pending: [],          // rivals queued to come back a few questions on
     picks: [],            // deck indices sitting on the current buttons
     comparePair: null,    // a repeated confusion, waiting for its side-by-side
     compared: new Set(),  // pairs already given the side-by-side this session
+    round: 0,             // questions resolved since the last checkpoint
+    roundFails: 0,        // misses among them
 
     phase: "question",
     // a refresh has no finish line to celebrate: it runs until you leave
@@ -969,21 +1028,26 @@ function selectQuestion() {
   }
   if (fresh !== -1 && readyForNew()) { S.lastKnown = false; return fresh; }
 
-  // pass 3: nothing due — pull the soonest-due unmastered card forward. While
-  // new characters are still queued this is the point of the exercise: drill
-  // what is on the table instead of moving on. Once the group is fully
-  // introduced it alternates with the filler below, so mastered characters
-  // keep coming back too.
+  // Pulling forward: the soonest-due unmastered card, waits notwithstanding.
   // Misses count as time already served, so a character that keeps going wrong
   // jumps the queue ahead of one that is merely due at the same moment.
-  if (fresh !== -1 || S.lastKnown) {
-    best = -1;
-    let bestNext = Infinity;
+  const pullForward = () => {
+    let b = -1, bestNext = Infinity;
     for (let i = 0; i < cards.length; i++) {
       if (!cards[i][2] || cards[i][0] >= MAX_LEVEL - 1) continue;
       const due = cards[i][1] / leech(cards[i]);
-      if (due < bestNext) { bestNext = due; best = i; }
+      if (due < bestNext) { bestNext = due; b = i; }
     }
+    return b;
+  };
+
+  // pass 3: nothing due — every other question drills the weakest card on
+  // the table ahead of its wait; the questions in between fall through to the
+  // known characters below. The strict alternation is what spaces a newcomer
+  // out: served back to back it would race to the top in four massed repeats,
+  // known for the moment and settled not at all.
+  if (S.lastKnown) {
+    best = pullForward();
     if (best !== -1) { S.lastKnown = false; return best; }
   }
 
@@ -1001,7 +1065,13 @@ function selectQuestion() {
       total += w;
     }
   }
-  if (mastered.length === 0) return fresh !== -1 ? fresh : 0;
+  if (mastered.length === 0) {
+    // nothing solid to alternate with yet: drill what is on the table, and
+    // only reach for a new character once everything else is served
+    best = pullForward();
+    if (best !== -1) { S.lastKnown = false; return best; }
+    return fresh !== -1 ? fresh : 0;
+  }
   let roll = Math.random() * total;
   for (let n = 0; n < mastered.length; n++) {
     roll -= weights[n];
@@ -1109,18 +1179,27 @@ function renderQuestion(isNew) {
   S.picks = picks;
   const p = pieSlices();
 
+  // In the reading direction the prompt is the character itself and the sound
+  // is withheld — spoken up front it would answer the question. It arrives on
+  // the correct tap instead.
+  const read = dir === "read";
   stage.innerHTML =
-    '<div class="prompt-zone">' +
-      '<button class="prompt" id="prompt" aria-label="Play the sound again">' +
-        '<span class="romaji-big">' + romajiOf(correct) + "</span>" +
-        ("speechSynthesis" in window ? '<span class="prompt-hint">tap to repeat</span>' : "") +
-      "</button>" +
+    '<div class="prompt-zone">' + (read
+      ? '<div class="kana-big kana-font' + (kanaOf(correct).length > 1 ? " two" : "") + '">' +
+          kanaOf(correct) + "</div>"
+      : '<button class="prompt" id="prompt" aria-label="Play the sound again">' +
+          '<span class="romaji-big">' + romajiOf(correct) + "</span>" +
+          ("speechSynthesis" in window ? '<span class="prompt-hint">tap to repeat</span>' : "") +
+        "</button>") +
     "</div>" +
     '<div class="answers">' +
     picks.map((i, n) =>
-      '<button class="answer kana-font' + (kanaOf(i).length > 1 ? " two" : "") +
-      (isNew && i === correct ? " new" : "") +
-      '" data-i="' + i + '"><span class="key mono">' + (n + 1) + "</span>" + kanaOf(i) + "</button>"
+      read
+      ? '<button class="answer roman' + (isNew && i === correct ? " new" : "") +
+        '" data-i="' + i + '"><span class="key mono">' + (n + 1) + "</span>" + romajiOf(i) + "</button>"
+      : '<button class="answer kana-font' + (kanaOf(i).length > 1 ? " two" : "") +
+        (isNew && i === correct ? " new" : "") +
+        '" data-i="' + i + '"><span class="key mono">' + (n + 1) + "</span>" + kanaOf(i) + "</button>"
     ).join("") +
     '<div class="pie" id="pie" role="img" style="--done:' + p.done + "%;--clean:" + p.clean +
     '%" aria-label="' + p.done + ' percent learned"></div>' +
@@ -1128,9 +1207,11 @@ function renderQuestion(isNew) {
   stage.querySelectorAll(".answer").forEach(btn => {
     btn.addEventListener("click", () => answer(btn));
   });
-  document.getElementById("prompt").addEventListener("click", () => speak(kanaOf(S.current)));
+  if (!read) document.getElementById("prompt").addEventListener("click", () => speak(kanaOf(S.current)));
   S.shownAt = performance.now();
-  speak(kanaOf(correct));
+  // a brand-new character in the reading direction is shown with its answer
+  // marked, so speaking it gives nothing away
+  if (!read || isNew) speak(kanaOf(correct));
 }
 
 function answer(btn) {
@@ -1166,6 +1247,7 @@ function answer(btn) {
       S.pending.push({ i: chosen, wait: 3 });
     }
     S.fails++;
+    S.roundFails++;
     store.fails[S.failKey] = S.fails;
     // a miss during a refresh still belongs to the groups the character lives
     // in, so their own tiles and pies stay honest about it
@@ -1179,6 +1261,10 @@ function answer(btn) {
     renderHud();
     return;
   }
+
+  // in the reading direction the sound arrives as the reward for the right
+  // answer — given with the question it would have handed the answer over
+  if (dir === "read") speak(kanaOf(S.current));
 
   if (!S.failed) {
     // answering with a known rival on the buttons and not falling for it is a
@@ -1202,6 +1288,7 @@ function answer(btn) {
   syncRefs(entry);
   saveStore();
   renderHud();
+  S.round++;
   // advance synchronously: the next question's audio has to be spoken inside
   // this click, or Chrome on Android drops it for want of a user gesture
   if (S.comparePair) {
@@ -1209,9 +1296,45 @@ function answer(btn) {
   } else if (!S.celebrated && S.cards.every(c => c[0] >= MAX_LEVEL - 1)) {
     S.celebrated = true;
     renderMastered();
+  } else if (S.round >= ROUND_LEN && S.forced === -1) {
+    renderCheckpoint();
   } else {
     showQuestion();
   }
+}
+
+function nextRound() {
+  S.round = 0;
+  S.roundFails = 0;
+  showQuestion();
+}
+
+// Where a round pauses. Cleared of due work it is a natural place to stop;
+// mid-learning it is just a breather with the score so far.
+function renderCheckpoint() {
+  S.phase = "checkpoint";
+  document.getElementById("sessionFoot").classList.add("hidden");
+  const caughtUp = S.cards.every(c => c[0] >= MAX_LEVEL - 1);
+  const settling = S.cards.filter(c => c[2] && c[0] < MAX_LEVEL - 1).length;
+  const waiting = S.cards.filter(c => !c[2]).length;
+  const m = S.roundFails;
+  stage.innerHTML =
+    '<div class="mastered">' +
+      '<div class="kana-big kana-font">' + (caughtUp ? "ばっちり" : "ひとやすみ") + "</div>" +
+      "<h2>" + (caughtUp ? "All caught up" : "Good round") + "</h2>" +
+      "<p>" + ROUND_LEN + " questions, " +
+        (m === 0 ? "no misses" : m === 1 ? "one miss" : m + " misses") + ".<br>" +
+        (caughtUp
+          ? "Everything is at the top level — more rounds keep it warm."
+          : settling + (settling === 1 ? " character" : " characters") + " still settling" +
+            (waiting ? ", " + waiting + " waiting to join." : ".")) + "</p>" +
+      '<div class="mastered-actions">' +
+        '<button class="primary-btn" id="keepGoing">Keep going</button>' +
+        '<button class="ghost-btn" id="toHome">Back to lessons</button>' +
+      "</div>" +
+    "</div>";
+  document.getElementById("keepGoing").addEventListener("click", nextRound);
+  document.getElementById("toHome").addEventListener("click", goHome);
 }
 
 // The screen a repeated mix-up earns: both characters at once, differences on
@@ -1255,7 +1378,7 @@ function renderMastered() {
         '<button class="ghost-btn" id="toHome">Back to lessons</button>' +
       "</div>" +
     "</div>";
-  document.getElementById("keepGoing").addEventListener("click", showQuestion);
+  document.getElementById("keepGoing").addEventListener("click", nextRound);
   document.getElementById("toHome").addEventListener("click", goHome);
 }
 
@@ -1263,9 +1386,9 @@ function renderMastered() {
 document.addEventListener("keydown", e => {
   if (!S) return;
   if (e.key === "Escape") { goHome(); return; }
-  if (S.phase === "compare" && (e.key === "Enter" || e.key === " ")) {
+  if ((S.phase === "compare" || S.phase === "checkpoint") && (e.key === "Enter" || e.key === " ")) {
     e.preventDefault();
-    const go = document.getElementById("compareGo");
+    const go = document.getElementById(S.phase === "compare" ? "compareGo" : "keepGoing");
     if (go) go.click();
     return;
   }
@@ -1277,6 +1400,7 @@ document.addEventListener("keydown", e => {
 });
 
 /* ---------- boot ---------- */
+document.getElementById("appVersion").textContent = APP_VERSION;
 renderHome();
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   navigator.serviceWorker.register("sw.js").catch(() => { /* offline still works next load */ });
