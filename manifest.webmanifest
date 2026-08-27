@@ -1,7 +1,7 @@
 {
-  "name": "Hiragana",
-  "short_name": "Hiragana",
-  "description": "Learn to read hiragana with adaptive spaced repetition.",
+  "name": "Yomikana",
+  "short_name": "Yomikana",
+  "description": "Learn to read the Japanese kana with adaptive spaced repetition.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

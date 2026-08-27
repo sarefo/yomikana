@@ -1,5 +1,5 @@
 "use strict";
-const CACHE = "hiragana-v3";
+const CACHE = "yomikana-v1";
 const ASSETS = ["./", "index.html", "manifest.webmanifest", "icon.svg"];
 
 self.addEventListener("install", e => {
@@ -15,7 +15,9 @@ self.addEventListener("install", e => {
 self.addEventListener("activate", e => {
   e.waitUntil((async () => {
     const keys = await caches.keys();
-    const stale = keys.filter(k => k !== CACHE);
+    // cache storage is shared across the whole origin, so only ever sweep up
+    // this app's own old caches — a neighbor's would be collateral damage
+    const stale = keys.filter(k => k !== CACHE && k.startsWith("yomikana-"));
     await Promise.all(stale.map(k => caches.delete(k)));
     await self.clients.claim();
     // an upgrade, not a first install: whatever is on screen is the old build
