@@ -56,13 +56,13 @@
   --shadow-lift: none;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; height: 100%; }
 body {
   background: var(--bg);
   color: var(--ink);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   line-height: 1.5;
-  min-height: 100dvh;
+  height: 100%;
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   user-select: none;
@@ -89,7 +89,7 @@ button:focus-visible, a:focus-visible {
 .hidden { display: none !important; }
 
 /* ---------- home ---------- */
-#home { display: flex; flex-direction: column; height: 100dvh; padding-bottom: 1rem; }
+#home { display: flex; flex-direction: column; height: 100%; padding-bottom: 1rem; }
 .topbar {
   display: flex;
   align-items: center;
@@ -672,7 +672,7 @@ function decayCard(c, now) {
 // Shown at the foot of the home screen so a phone can tell whether the newest
 // build has actually landed. Bump on every release, together with the CACHE
 // name in sw.js.
-const APP_VERSION = "v8";
+const APP_VERSION = "v9";
 
 const STORE_KEY = "yomikana-v1";
 const LEGACY_KEY = "hiragana-v1";  // the pre-rename store, no longer read
