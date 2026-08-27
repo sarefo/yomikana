@@ -378,6 +378,16 @@ const DISPLAY = [
 const NEXT_BY_LEVEL = [0, 1, 5, 10, 20];
 const MAX_LEVEL = NEXT_BY_LEVEL.length; // levels run 0..4
 
+// How long a new character has to wait its turn. All three have to be clear
+// before one is introduced: every character already on the table answered right
+// at least NEW_AFTER_LEVEL times, no more than WORKING_SET of them still short
+// of the top level, and at least NEW_COOLDOWN questions since the last
+// newcomer. Left ungated the deck fills up about twice as fast as it is
+// learned — you end up juggling seven half-known characters instead of four.
+const NEW_AFTER_LEVEL = 3;
+const WORKING_SET = 4;
+const NEW_COOLDOWN = 6;
+
 const STORE_KEY = "hiragana-v1";
 
 /* ---------- persistence ---------- */
@@ -398,6 +408,11 @@ function groupState(gi) {
   if (!arr || arr.length !== GROUPS[gi].cards.length) {
     arr = GROUPS[gi].cards.map(() => [0, 0, 0]); // [level, next, introduced]
     store.groups[name] = arr;
+  }
+  // decks saved before the introduced flag existed: anything above level 0 has
+  // plainly been seen, so it should not be re-announced as new
+  for (let i = 0; i < arr.length; i++) {
+    if (arr[i].length < 3) arr[i][2] = arr[i][0] > 0 ? 1 : 0;
   }
   return arr;
 }
@@ -485,6 +500,8 @@ function startSession(gi) {
     current: -1,
     failed: false,        // wrong answer given on the current display
     fails: store.fails[GROUPS[gi].name] || 0,
+    sinceNew: NEW_COOLDOWN,  // questions since the last new character
+
     phase: "question",
     celebrated: groupState(gi).every(c => c[0] >= MAX_LEVEL - 1),
     shownAt: 0,
@@ -503,31 +520,58 @@ function goHome() {
 }
 document.getElementById("backBtn").addEventListener("click", goHome);
 
-/* ---------- the algorithm (exact port) ---------- */
+/* ---------- the algorithm ---------- */
+
+// The gate on pass 2. A character only joins the deck once the ones already in
+// it are holding up: none still shaky, not too many mid-flight, and a decent
+// stretch of drilling since the last one arrived.
+function readyForNew() {
+  let inPlay = 0, solid = 0;
+  for (let i = 0; i < S.cards.length; i++) {
+    const c = S.cards[i];
+    if (!c[2]) continue;                    // not introduced yet
+    if (c[0] < NEW_AFTER_LEVEL) return false;
+    if (c[0] < MAX_LEVEL - 1) inPlay++;     // learned, not yet solid
+    else solid++;
+  }
+  if (inPlay >= WORKING_SET) return false;
+  // the cooldown buys drilling time, so it only earns its keep when there is
+  // something to drill: with nothing half-known and one lone mastered card to
+  // fall back on it would just show that card over and over
+  if (S.sinceNew < NEW_COOLDOWN && (inPlay > 0 || solid > 1)) return false;
+  return true;
+}
+
 function selectQuestion() {
   const cards = S.cards;
   if (S.forced !== -1) return S.forced;
 
-  // pass 1: weakest due card among those already introduced (stop at first new one)
+  // pass 1: weakest due card among those already introduced. A missed card sits
+  // at level 0 with no wait left, so it lands here first.
   let best = -1, bestLevel = MAX_LEVEL - 1;
   for (let i = 0; i < cards.length; i++) {
-    if (cards[i][0] === 0) break;
+    if (!cards[i][2]) continue;
     if (cards[i][1] === 0 && cards[i][0] < bestLevel) { bestLevel = cards[i][0]; best = i; }
   }
   if (best !== -1) { S.lastKnown = false; return best; }
 
-  // pass 2: introduce the next new card
+  // pass 2: introduce the next new card — but only if the deck is ready for it
+  let fresh = -1;
   for (let i = 0; i < cards.length; i++) {
-    if (cards[i][0] === 0) { S.lastKnown = false; return i; }
+    if (!cards[i][2]) { fresh = i; break; }
   }
+  if (fresh !== -1 && readyForNew()) { S.lastKnown = false; return fresh; }
 
-  // pass 3: nothing due — pull forward the soonest-due unmastered card,
-  // unless the previous question was already filler
-  if (S.lastKnown) {
+  // pass 3: nothing due — pull the soonest-due unmastered card forward. While
+  // new characters are still queued this is the point of the exercise: drill
+  // what is on the table instead of moving on. Once the group is fully
+  // introduced it alternates with the filler below, so mastered characters
+  // keep coming back too.
+  if (fresh !== -1 || S.lastKnown) {
     best = -1;
-    let bestNext = 100;
+    let bestNext = Infinity;
     for (let i = 0; i < cards.length; i++) {
-      if (cards[i][0] >= MAX_LEVEL - 1) continue;
+      if (!cards[i][2] || cards[i][0] >= MAX_LEVEL - 1) continue;
       if (cards[i][1] < bestNext) { bestNext = cards[i][1]; best = i; }
     }
     if (best !== -1) { S.lastKnown = false; return best; }
@@ -537,9 +581,9 @@ function selectQuestion() {
   S.lastKnown = true;
   const mastered = [];
   for (let i = 0; i < cards.length; i++) {
-    if (cards[i][0] > MAX_LEVEL - 2) mastered.push(i);
+    if (cards[i][0] >= MAX_LEVEL - 1) mastered.push(i);
   }
-  if (mastered.length === 0) return 0;
+  if (mastered.length === 0) return fresh !== -1 ? fresh : 0;
   return mastered[Math.floor(Math.random() * mastered.length)];
 }
 
@@ -561,7 +605,10 @@ function showQuestion() {
   const isNew = !isForced && !card[2];
   if (isNew) {
     card[2] = 1;
+    S.sinceNew = 0;
     saveStore();
+  } else {
+    S.sinceNew++;
   }
   renderQuestion(isNew);
 }
