@@ -424,6 +424,29 @@ button:focus-visible, a:focus-visible {
 }
 .ghost-btn:hover { border-color: var(--indigo); }
 
+.session-foot { margin-top: .25rem; display: grid; place-items: center; }
+
+/* compare — a repeated mix-up puts both characters side by side */
+.compare { text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 1rem; animation: stageIn .25s ease-out; }
+.compare h2 { font-size: 1.2rem; }
+.compare-row { display: flex; justify-content: center; gap: .75rem; }
+.compare-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .25rem;
+  padding: 1rem 1.25rem .75rem;
+  min-width: 7.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 1.125rem;
+  background: var(--bg);
+}
+.compare-card:hover { border-color: var(--indigo); }
+.compare-kana { font-size: clamp(3.25rem, 16vw, 4.5rem); line-height: 1.15; font-weight: 500; }
+.compare-romaji { color: var(--muted); font-weight: 650; }
+.compare-sub { color: var(--muted); font-size: .85rem; }
+.compare .primary-btn { margin: .25rem auto 0; min-width: 11rem; }
+
 /* mastered */
 .mastered { text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 1rem; animation: stageIn .25s ease-out; }
 .mastered .kana-big { font-size: 4rem; }
@@ -487,6 +510,9 @@ button:focus-visible, a:focus-visible {
     <div class="session-title" id="sessionTitle"></div>
   </div>
   <div class="stage" id="stage"></div>
+  <div id="sessionFoot" class="session-foot">
+    <button id="pauseBtn" class="link-btn">Resume later</button>
+  </div>
 </main>
 
 <script>
@@ -611,9 +637,9 @@ const LEGACY_KEY = "hiragana-v1";  // the pre-rename store, no longer read
 function loadStore() {
   try {
     const s = JSON.parse(localStorage.getItem(STORE_KEY));
-    if (s && s.groups) { s.fails = s.fails || {}; return s; }
+    if (s && s.groups) { s.fails = s.fails || {}; s.pairs = s.pairs || {}; return s; }
   } catch (e) { /* corrupted or unavailable storage: start fresh */ }
-  return { groups: {}, settings: {}, fails: {} };
+  return { groups: {}, settings: {}, fails: {}, pairs: {} };
 }
 // the rename to Yomikana started the store over; don't leave the old one behind
 try { localStorage.removeItem(LEGACY_KEY); } catch (e) { /* nothing to clean */ }
@@ -631,6 +657,12 @@ function groupKey(gi) { return script + ":" + GROUPS[gi].name; }
 function saveStore() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) { /* private mode etc. */ }
 }
+
+// Confusions are remembered as pairs, not lone characters: what trips a
+// learner up is rarely た by itself but た-against-だ, and the cure — meeting
+// the rival again — needs both names. Kana are unique across the two scripts,
+// so the key needs no script prefix.
+function pairKey(a, b) { return a < b ? a + "|" + b : b + "|" + a; }
 // [level, next, introduced, lastDay, misses]
 function groupState(gi) {
   const key = groupKey(gi);
@@ -820,6 +852,7 @@ document.getElementById("resetYes").addEventListener("click", () => {
   // theme back or turn the sound on again
   store.groups = {};
   store.fails = {};
+  store.pairs = {};
   saveStore();
   renderHome();
   showReset("done");
@@ -855,6 +888,10 @@ function startSession(gi) {
     failed: false,        // wrong answer given on the current display
     fails: store.fails[review ? script + ":review" : groupKey(gi)] || 0,
     sinceNew: NEW_COOLDOWN,  // questions since the last new character
+    pending: [],          // rivals queued to come back a few questions on
+    picks: [],            // deck indices sitting on the current buttons
+    comparePair: null,    // a repeated confusion, waiting for its side-by-side
+    compared: new Set(),  // pairs already given the side-by-side this session
 
     phase: "question",
     // a refresh has no finish line to celebrate: it runs until you leave
@@ -874,6 +911,10 @@ function goHome() {
   renderHome();
 }
 document.getElementById("backBtn").addEventListener("click", goHome);
+// Progress is written to the store on every answer, so leaving costs nothing
+// and picking the group again carries straight on. The back arrow already does
+// exactly this; the button exists to say out loud that leaving is safe.
+document.getElementById("pauseBtn").addEventListener("click", goHome);
 
 /* ---------- the algorithm ---------- */
 
@@ -900,6 +941,13 @@ function readyForNew() {
 function selectQuestion() {
   const cards = S.cards;
   if (S.forced !== -1) return S.forced;
+
+  // pass 0: a rival queued at the last confusion. It sits out a few questions
+  // rather than coming straight back — near enough to compare against the miss
+  // while it is fresh, not so near that the answer is still on the screen.
+  for (const p of S.pending) p.wait--;
+  const duePair = S.pending.findIndex(p => p.wait <= 0 && p.i !== S.current);
+  if (duePair !== -1) return S.pending.splice(duePair, 1)[0].i;
 
   // pass 1: weakest due card among those already introduced. A missed card sits
   // at level 0 with no wait left, so it lands here first. Ties go to whichever
@@ -985,6 +1033,7 @@ function showQuestion() {
   } else {
     S.sinceNew++;
   }
+  document.getElementById("sessionFoot").classList.remove("hidden");
   renderQuestion(isNew);
 }
 
@@ -1037,12 +1086,19 @@ function renderQuestion(isNew) {
   // from a hundred kana the choices would be trivially far apart, which would
   // make a refresh easier than the drill it is refreshing.
   const pool = S.deck;
-  const near = [], far = [];
+  const near = [], far = [], rivals = [];
   for (let i = 0; i < pool.length; i++) {
     if (i === correct || pool[i].r === pool[correct].r) continue;
+    if (store.pairs[pairKey(pool[i].k, pool[correct].k)]) { rivals.push(i); continue; }
     (pool[i].keys.some(k => pool[correct].keys.includes(k)) ? near : far).push(i);
   }
-  const picks = [correct];
+  // recorded rivals take seats first: telling the pair apart is exactly the
+  // discrimination worth practicing, so they keep meeting on the buttons —
+  // with the red/green verdict right there — until the confusion is worked off
+  rivals.sort((a, b) =>
+    store.pairs[pairKey(pool[b].k, pool[correct].k)] - store.pairs[pairKey(pool[a].k, pool[correct].k)]);
+  const picks = [correct, ...rivals.splice(0, 2)];
+  near.push(...rivals);
   for (const bag of [near, far]) {
     while (picks.length < 4 && bag.length) {
       picks.push(bag.splice(Math.floor(Math.random() * bag.length), 1)[0]);
@@ -1050,6 +1106,7 @@ function renderQuestion(isNew) {
   }
   const pos = Math.floor(Math.random() * picks.length);
   [picks[0], picks[pos]] = [picks[pos], picks[0]];
+  S.picks = picks;
   const p = pieSlices();
 
   stage.innerHTML =
@@ -1083,9 +1140,10 @@ function answer(btn) {
   if (performance.now() - S.shownAt < 130) return;
   const entry = S.deck[S.current];
   const card = S.cards[S.current];
+  const chosen = Number(btn.dataset.i);
   const now = today();
 
-  if (Number(btn.dataset.i) !== S.current) {
+  if (chosen !== S.current) {
     // miss: the card drops to zero, but the screen stays put — the question is
     // not over until the right kana is picked. wrong choices just go red.
     S.failed = true;
@@ -1094,6 +1152,19 @@ function answer(btn) {
     card[1] = 0;
     card[3] = now;
     card[4] = (card[4] || 0) + 1;  // and from now on it comes back sooner
+    const pk = pairKey(entry.k, S.deck[chosen].k);
+    const seen = Math.min((store.pairs[pk] || 0) + 1, 9);
+    store.pairs[pk] = seen;
+    // a repeat of a known confusion has earned a side-by-side look once the
+    // question resolves; a first slip is just a miss
+    if (seen >= 2 && !S.compared.has(pk)) {
+      S.compared.add(pk);
+      S.comparePair = [S.current, chosen];
+    }
+    // and the rival will come round as a question of its own
+    if (S.cards[chosen][2] && !S.pending.some(p => p.i === chosen)) {
+      S.pending.push({ i: chosen, wait: 3 });
+    }
     S.fails++;
     store.fails[S.failKey] = S.fails;
     // a miss during a refresh still belongs to the groups the character lives
@@ -1110,6 +1181,13 @@ function answer(btn) {
   }
 
   if (!S.failed) {
+    // answering with a known rival on the buttons and not falling for it is a
+    // won discrimination, and works the recorded confusion back off the books
+    for (const i of S.picks) {
+      if (i === S.current) continue;
+      const pk = pairKey(entry.k, S.deck[i].k);
+      if (store.pairs[pk] && --store.pairs[pk] === 0) delete store.pairs[pk];
+    }
     S.forced = -1;
     if (card[0] < MAX_LEVEL - 1) {
       card[0]++;
@@ -1126,7 +1204,9 @@ function answer(btn) {
   renderHud();
   // advance synchronously: the next question's audio has to be spoken inside
   // this click, or Chrome on Android drops it for want of a user gesture
-  if (!S.celebrated && S.cards.every(c => c[0] >= MAX_LEVEL - 1)) {
+  if (S.comparePair) {
+    renderCompare();
+  } else if (!S.celebrated && S.cards.every(c => c[0] >= MAX_LEVEL - 1)) {
     S.celebrated = true;
     renderMastered();
   } else {
@@ -1134,8 +1214,37 @@ function answer(btn) {
   }
 }
 
+// The screen a repeated mix-up earns: both characters at once, differences on
+// display. Contrast is what teaches a discrimination — met one at a time the
+// pair just recreates the conditions of the miss.
+function renderCompare() {
+  S.phase = "compare";
+  const pair = S.comparePair;
+  S.comparePair = null;
+  stage.innerHTML =
+    '<div class="compare">' +
+      "<h2>Easy to mix up</h2>" +
+      '<div class="compare-row">' +
+      pair.map(i =>
+        '<button class="compare-card" data-i="' + i + '" aria-label="Play ' + romajiOf(i) + '">' +
+          '<span class="compare-kana kana-font">' + kanaOf(i) + "</span>" +
+          '<span class="compare-romaji">' + romajiOf(i) + "</span>" +
+        "</button>"
+      ).join("") +
+      "</div>" +
+      '<p class="compare-sub">Take a moment to spot what sets them apart' +
+        ("speechSynthesis" in window ? " — tap either one to hear it" : "") + ".</p>" +
+      '<button class="primary-btn" id="compareGo">Continue</button>' +
+    "</div>";
+  stage.querySelectorAll(".compare-card").forEach(btn => {
+    btn.addEventListener("click", () => speak(kanaOf(Number(btn.dataset.i))));
+  });
+  document.getElementById("compareGo").addEventListener("click", showQuestion);
+}
+
 function renderMastered() {
   S.phase = "mastered";
+  document.getElementById("sessionFoot").classList.add("hidden");
   stage.innerHTML =
     '<div class="mastered">' +
       '<div class="kana-big kana-font">よくできました</div>' +
@@ -1154,6 +1263,12 @@ function renderMastered() {
 document.addEventListener("keydown", e => {
   if (!S) return;
   if (e.key === "Escape") { goHome(); return; }
+  if (S.phase === "compare" && (e.key === "Enter" || e.key === " ")) {
+    e.preventDefault();
+    const go = document.getElementById("compareGo");
+    if (go) go.click();
+    return;
+  }
   if (S.phase === "question" && e.key >= "1" && e.key <= "4") {
     const btns = stage.querySelectorAll(".answer");
     const btn = btns[Number(e.key) - 1];
