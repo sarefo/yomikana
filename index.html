@@ -89,7 +89,7 @@ button:focus-visible, a:focus-visible {
 .hidden { display: none !important; }
 
 /* ---------- home ---------- */
-#home { display: flex; flex-direction: column; min-height: 100dvh; padding-bottom: 1rem; }
+#home { display: flex; flex-direction: column; height: 100dvh; padding-bottom: 1rem; }
 .topbar {
   display: flex;
   align-items: center;
@@ -162,10 +162,6 @@ button:focus-visible, a:focus-visible {
    its labels are two characters and an arrow rather than a word */
 .dir-switch button { font-size: clamp(.78rem, 3.4vw, .9rem); letter-spacing: .04em; }
 
-/* Four rows of two, sized off the viewport so the whole deck lands on one
-   screen: a small phone loses tile height, never a row. The 17rem is
-   everything the grid is not — the view's padding, the topbar, the switch
-   row, the reset strip and the three gaps between the rows. */
 /* The way back into everything already learned. It sits above the deck rather
    than in it because what has gone stale is spread across the groups, not
    parked in any one of them; it stays hidden until there is something to
@@ -196,18 +192,23 @@ button:focus-visible, a:focus-visible {
 .refresh-bar { grid-column: 1 / -1; height: .25rem; margin-top: .4rem; border-radius: 999px; background: var(--indigo-soft); overflow: hidden; }
 .refresh-bar > i { display: block; height: 100%; background: var(--indigo); border-radius: 999px; transition: width .3s; }
 
+/* Four rows of two, taking whatever height the rest of the screen leaves over.
+   This used to be a clamp against a hand-counted budget of everything the grid
+   is not, which had to be re-measured every time a control was added or moved,
+   and was wrong — and the deck scrolled — whenever it was not. Claiming the
+   leftover space instead is the same intent with nothing to keep in step: a
+   short screen loses tile height, never a row, and the footer stays put.
+   The cap keeps a desktop from blowing the tiles up to fill a tall window. */
 .groups {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
   gap: .625rem;
-  grid-auto-rows: clamp(3.5rem, calc((100dvh - 17rem) / 4), 7.5rem);
+  flex: 1;
+  min-height: 0;
+  max-height: 32.375rem;
   list-style: none;
 }
-/* with the refresh strip showing, the rows give up its height and the gap
-   under it -- measured at 5.07rem together -- so the deck still lands on one
-   screen. The floor drops a little too: on a short phone the strip is worth
-   more than the last quarter-rem of tile height. */
-#home.has-refresh .groups { grid-auto-rows: clamp(3.25rem, calc((100dvh - 22rem) / 4), 7.5rem); }
 .group-card {
   width: 100%;
   height: 100%;
@@ -671,7 +672,7 @@ function decayCard(c, now) {
 // Shown at the foot of the home screen so a phone can tell whether the newest
 // build has actually landed. Bump on every release, together with the CACHE
 // name in sw.js.
-const APP_VERSION = "v7";
+const APP_VERSION = "v8";
 
 const STORE_KEY = "yomikana-v1";
 const LEGACY_KEY = "hiragana-v1";  // the pre-rename store, no longer read
@@ -828,7 +829,6 @@ function reviewDeck() {
 function renderRefresh() {
   const deck = reviewDeck();
   const total = deck.length;
-  homeEl.classList.toggle("has-refresh", total > 0);
   refreshEl.classList.toggle("hidden", total === 0);
   if (!total) return;
   let rusty = 0;
