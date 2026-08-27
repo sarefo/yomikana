@@ -1,5 +1,5 @@
 "use strict";
-const CACHE = "yomikana-v2";
+const CACHE = "yomikana-v3";
 const ASSETS = ["./", "index.html", "manifest.webmanifest", "icon.svg"];
 
 self.addEventListener("install", e => {

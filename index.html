@@ -80,11 +80,12 @@ button:focus-visible, a:focus-visible {
 .hidden { display: none !important; }
 
 /* ---------- home ---------- */
+#home { display: flex; flex-direction: column; min-height: 100dvh; padding-bottom: 1rem; }
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: .5rem 0 1.5rem;
+  padding: .5rem 0 .875rem;
 }
 .brand { display: flex; align-items: center; gap: .75rem; }
 .brand-seal {
@@ -120,36 +121,95 @@ button:focus-visible, a:focus-visible {
 [data-theme="dark"] #themeBtn .main { display: none; }
 [data-theme="dark"] #themeBtn .alt { display: block; }
 
-.groups { display: grid; gap: .75rem; list-style: none; }
+/* the two scripts are one choice, so they share one pill rather than sitting
+   as two separate tabs above the deck */
+.script-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: .875rem;
+  padding: .25rem;
+  margin-bottom: .75rem;
+  box-shadow: var(--shadow);
+}
+.script-switch button {
+  min-height: 2.5rem;
+  border-radius: .625rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: .4rem;
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  transition: background .15s, color .15s;
+}
+.script-switch .native { font-size: 1rem; font-weight: 500; letter-spacing: .02em; }
+.script-switch button[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+
+/* Four rows of two, sized off the viewport so the whole deck lands on one
+   screen: a small phone loses tile height, never a row. The 17rem is
+   everything the grid is not — the view's padding, the topbar, the script
+   switch, the reset strip and the three gaps between the rows. */
+.groups {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .625rem;
+  grid-auto-rows: clamp(3.5rem, calc((100dvh - 17rem) / 4), 7.5rem);
+  list-style: none;
+}
 .group-card {
   width: 100%;
+  height: 100%;
   text-align: left;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 1rem;
-  padding: 1rem 1.125rem;
+  padding: .5rem .625rem;
   box-shadow: var(--shadow);
-  display: grid;
-  gap: .625rem;
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  overflow: hidden;
+  container-type: size;
   transition: transform .15s, box-shadow .15s, border-color .15s;
 }
 .group-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-lift); border-color: var(--border-strong); }
 .group-card:active { transform: translateY(0); }
-.group-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
-.group-name { font-weight: 650; font-size: 1rem; }
-.group-count { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.group-count b { color: var(--indigo); font-weight: 650; }
-.group-preview {
-  font-size: .95rem;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  letter-spacing: .12em;
+/* one character of the group, sunk into the tile: it names the script at a
+   glance without turning the tile back into a character list, and it fills
+   the middle of the tile that the two lines of text leave empty */
+.group-mark {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  font-size: 2.25rem;
+  line-height: 1;
+  color: var(--ink);
+  opacity: .13;
+  pointer-events: none;
 }
+.group-mark.two { font-size: 1.4rem; }
+/* sized off the tile rather than the root, so it shrinks with the rows on a
+   short screen instead of overrunning them */
+@supports (font-size: 1cqh) {
+  .group-mark { font-size: 44cqh; }
+  .group-mark.two { font-size: 27cqh; }
+}
+.group-top { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+.group-index { font-size: .7rem; color: var(--muted); }
+.group-count { font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.group-count b { color: var(--indigo); font-weight: 650; }
+.group-card.full .group-count, .group-card.full .group-count b { color: var(--good); }
+.group-name { font-weight: 650; font-size: .88rem; line-height: 1.2; }
 .group-bar { height: .25rem; border-radius: 999px; background: var(--indigo-soft); overflow: hidden; }
-.group-bar > div { height: 100%; background: var(--indigo); border-radius: 999px; transition: width .3s; }
-.home-foot { margin-top: 2rem; font-size: .8rem; color: var(--muted); text-align: center; }
+.group-bar > i { display: block; height: 100%; background: var(--indigo); border-radius: 999px; transition: width .3s; }
+.group-card.full .group-bar > i { background: var(--good); }
+.home-foot { margin-top: auto; padding-top: .75rem; font-size: .8rem; color: var(--muted); text-align: center; }
 /* one fixed-height slot holds the button, the confirmation and the receipt in
    turn, so swapping between them never shifts the page under a thumb */
 .reset-zone { margin-top: .75rem; min-height: 2.75rem; display: grid; place-items: center; }
@@ -346,7 +406,7 @@ button:focus-visible, a:focus-visible {
 <main id="home" class="view">
   <div class="topbar">
     <div class="brand">
-      <div class="brand-seal kana-font" aria-hidden="true">あ</div>
+      <div class="brand-seal kana-font" id="brandSeal" aria-hidden="true">あ</div>
       <h1>Yomikana<small>learn to read the kana</small></h1>
     </div>
     <div class="toggles">
@@ -360,13 +420,16 @@ button:focus-visible, a:focus-visible {
       </button>
     </div>
   </div>
+  <div class="script-switch" role="tablist" aria-label="Script">
+    <button role="tab" data-script="hira" aria-selected="true"><span class="native kana-font">ひらがな</span>Hiragana</button>
+    <button role="tab" data-script="kata" aria-selected="false"><span class="native kana-font">カタカナ</span>Katakana</button>
+  </div>
   <ul id="groupList" class="groups"></ul>
   <div class="home-foot">
-    <p>Miss a character and it starts over from zero.<br>Works offline once loaded.</p>
     <div class="reset-zone">
       <button id="resetBtn" class="link-btn">Reset progress</button>
       <div id="resetConfirm" class="reset-confirm hidden">
-        <span>Erase every group?</span>
+        <span>Erase both scripts?</span>
         <button id="resetYes" class="link-btn danger">Erase</button>
         <button id="resetNo" class="link-btn">Cancel</button>
       </div>
@@ -387,18 +450,47 @@ button:focus-visible, a:focus-visible {
 
 <script>
 "use strict";
-const GROUPS = [{"name":"vowels_ks","cards":[{"k":"あ","r":"a"},{"k":"い","r":"i"},{"k":"う","r":"u"},{"k":"え","r":"e"},{"k":"お","r":"o"},{"k":"か","r":"ka"},{"k":"き","r":"ki"},{"k":"く","r":"ku"},{"k":"け","r":"ke"},{"k":"こ","r":"ko"},{"k":"さ","r":"sa"},{"k":"し","r":"shi"},{"k":"す","r":"su"},{"k":"せ","r":"se"},{"k":"そ","r":"so"}]},{"name":"sounds_tnh","cards":[{"k":"た","r":"ta"},{"k":"ち","r":"chi"},{"k":"つ","r":"tsu"},{"k":"て","r":"te"},{"k":"と","r":"to"},{"k":"な","r":"na"},{"k":"に","r":"ni"},{"k":"ぬ","r":"nu"},{"k":"ね","r":"ne"},{"k":"の","r":"no"},{"k":"ん","r":"n"},{"k":"は","r":"ha"},{"k":"ひ","r":"hi"},{"k":"ふ","r":"fu"},{"k":"へ","r":"he"},{"k":"ほ","r":"ho"}]},{"name":"sounds_myrw","cards":[{"k":"ま","r":"ma"},{"k":"み","r":"mi"},{"k":"む","r":"mu"},{"k":"め","r":"me"},{"k":"も","r":"mo"},{"k":"や","r":"ya"},{"k":"ゆ","r":"yu"},{"k":"よ","r":"yo"},{"k":"ら","r":"ra"},{"k":"り","r":"ri"},{"k":"る","r":"ru"},{"k":"れ","r":"re"},{"k":"ろ","r":"ro"},{"k":"わ","r":"wa"},{"k":"を","r":"wo"}]},{"name":"sounds_kgtd","cards":[{"k":"た","r":"ta"},{"k":"ち","r":"chi"},{"k":"つ","r":"tsu"},{"k":"て","r":"te"},{"k":"と","r":"to"},{"k":"か","r":"ka"},{"k":"き","r":"ki"},{"k":"く","r":"ku"},{"k":"け","r":"ke"},{"k":"こ","r":"ko"},{"k":"が","r":"ga"},{"k":"ぎ","r":"gi"},{"k":"ぐ","r":"gu"},{"k":"げ","r":"ge"},{"k":"ご","r":"go"},{"k":"だ","r":"da"},{"k":"ぢ","r":"ji"},{"k":"づ","r":"du"},{"k":"で","r":"de"},{"k":"ど","r":"do"}]},{"name":"sounds_szhbp","cards":[{"k":"は","r":"ha"},{"k":"ひ","r":"hi"},{"k":"ふ","r":"fu"},{"k":"へ","r":"he"},{"k":"ほ","r":"ho"},{"k":"さ","r":"sa"},{"k":"し","r":"shi"},{"k":"す","r":"su"},{"k":"せ","r":"se"},{"k":"そ","r":"so"},{"k":"ざ","r":"za"},{"k":"じ","r":"ji"},{"k":"ず","r":"zu"},{"k":"ぜ","r":"ze"},{"k":"ぞ","r":"zo"},{"k":"ば","r":"ba"},{"k":"び","r":"bi"},{"k":"ぶ","r":"bu"},{"k":"べ","r":"be"},{"k":"ぼ","r":"bo"},{"k":"ぱ","r":"pa"},{"k":"ぴ","r":"pi"},{"k":"ぷ","r":"pu"},{"k":"ぺ","r":"pe"},{"k":"ぽ","r":"po"}]},{"name":"similar","cards":[{"k":"た","r":"ta"},{"k":"ち","r":"chi"},{"k":"な","r":"na"},{"k":"に","r":"ni"},{"k":"ぬ","r":"nu"},{"k":"ね","r":"ne"},{"k":"は","r":"ha"},{"k":"ほ","r":"ho"},{"k":"あ","r":"a"},{"k":"き","r":"ki"},{"k":"さ","r":"sa"},{"k":"ま","r":"ma"},{"k":"め","r":"me"},{"k":"ら","r":"ra"},{"k":"る","r":"ru"},{"k":"れ","r":"re"},{"k":"ろ","r":"ro"},{"k":"わ","r":"wa"}]},{"name":"diphthong_1","cards":[{"k":"きゃ","r":"kya"},{"k":"きゅ","r":"kyu"},{"k":"きょ","r":"kyo"},{"k":"しゃ","r":"sha"},{"k":"しゅ","r":"shu"},{"k":"しょ","r":"sho"},{"k":"ちゃ","r":"cha"},{"k":"ちゅ","r":"chu"},{"k":"ちょ","r":"cho"},{"k":"にゃ","r":"nya"},{"k":"にゅ","r":"nyu"},{"k":"にょ","r":"nyo"},{"k":"ひゃ","r":"hya"},{"k":"ひゅ","r":"hyu"},{"k":"ひょ","r":"hyo"},{"k":"じゃ","r":"ja"},{"k":"じゅ","r":"ju"},{"k":"じょ","r":"jo"}]},{"name":"diphthong_2","cards":[{"k":"みゃ","r":"mya"},{"k":"みゅ","r":"myu"},{"k":"みょ","r":"myo"},{"k":"りゃ","r":"rya"},{"k":"りゅ","r":"ryu"},{"k":"りょ","r":"ryo"},{"k":"ぎゃ","r":"gya"},{"k":"ぎゅ","r":"gyu"},{"k":"ぎょ","r":"gyo"},{"k":"ぢゃ","r":"ja"},{"k":"ぢゅ","r":"ju"},{"k":"ぢょ","r":"jo"},{"k":"びゃ","r":"bya"},{"k":"びゅ","r":"byu"},{"k":"びょ","r":"byo"},{"k":"ぴゃ","r":"pya"},{"k":"ぴゅ","r":"pyu"},{"k":"ぴょ","r":"pyo"}]}];
+const HIRAGANA = [{"name":"vowels_ks","cards":[{"k":"あ","r":"a"},{"k":"い","r":"i"},{"k":"う","r":"u"},{"k":"え","r":"e"},{"k":"お","r":"o"},{"k":"か","r":"ka"},{"k":"き","r":"ki"},{"k":"く","r":"ku"},{"k":"け","r":"ke"},{"k":"こ","r":"ko"},{"k":"さ","r":"sa"},{"k":"し","r":"shi"},{"k":"す","r":"su"},{"k":"せ","r":"se"},{"k":"そ","r":"so"}]},{"name":"sounds_tnh","cards":[{"k":"た","r":"ta"},{"k":"ち","r":"chi"},{"k":"つ","r":"tsu"},{"k":"て","r":"te"},{"k":"と","r":"to"},{"k":"な","r":"na"},{"k":"に","r":"ni"},{"k":"ぬ","r":"nu"},{"k":"ね","r":"ne"},{"k":"の","r":"no"},{"k":"ん","r":"n"},{"k":"は","r":"ha"},{"k":"ひ","r":"hi"},{"k":"ふ","r":"fu"},{"k":"へ","r":"he"},{"k":"ほ","r":"ho"}]},{"name":"sounds_myrw","cards":[{"k":"ま","r":"ma"},{"k":"み","r":"mi"},{"k":"む","r":"mu"},{"k":"め","r":"me"},{"k":"も","r":"mo"},{"k":"や","r":"ya"},{"k":"ゆ","r":"yu"},{"k":"よ","r":"yo"},{"k":"ら","r":"ra"},{"k":"り","r":"ri"},{"k":"る","r":"ru"},{"k":"れ","r":"re"},{"k":"ろ","r":"ro"},{"k":"わ","r":"wa"},{"k":"を","r":"wo"}]},{"name":"sounds_kgtd","cards":[{"k":"た","r":"ta"},{"k":"ち","r":"chi"},{"k":"つ","r":"tsu"},{"k":"て","r":"te"},{"k":"と","r":"to"},{"k":"か","r":"ka"},{"k":"き","r":"ki"},{"k":"く","r":"ku"},{"k":"け","r":"ke"},{"k":"こ","r":"ko"},{"k":"が","r":"ga"},{"k":"ぎ","r":"gi"},{"k":"ぐ","r":"gu"},{"k":"げ","r":"ge"},{"k":"ご","r":"go"},{"k":"だ","r":"da"},{"k":"ぢ","r":"ji"},{"k":"づ","r":"du"},{"k":"で","r":"de"},{"k":"ど","r":"do"}]},{"name":"sounds_szhbp","cards":[{"k":"は","r":"ha"},{"k":"ひ","r":"hi"},{"k":"ふ","r":"fu"},{"k":"へ","r":"he"},{"k":"ほ","r":"ho"},{"k":"さ","r":"sa"},{"k":"し","r":"shi"},{"k":"す","r":"su"},{"k":"せ","r":"se"},{"k":"そ","r":"so"},{"k":"ざ","r":"za"},{"k":"じ","r":"ji"},{"k":"ず","r":"zu"},{"k":"ぜ","r":"ze"},{"k":"ぞ","r":"zo"},{"k":"ば","r":"ba"},{"k":"び","r":"bi"},{"k":"ぶ","r":"bu"},{"k":"べ","r":"be"},{"k":"ぼ","r":"bo"},{"k":"ぱ","r":"pa"},{"k":"ぴ","r":"pi"},{"k":"ぷ","r":"pu"},{"k":"ぺ","r":"pe"},{"k":"ぽ","r":"po"}]},{"name":"similar","cards":[{"k":"た","r":"ta"},{"k":"ち","r":"chi"},{"k":"な","r":"na"},{"k":"に","r":"ni"},{"k":"ぬ","r":"nu"},{"k":"ね","r":"ne"},{"k":"は","r":"ha"},{"k":"ほ","r":"ho"},{"k":"あ","r":"a"},{"k":"き","r":"ki"},{"k":"さ","r":"sa"},{"k":"ま","r":"ma"},{"k":"め","r":"me"},{"k":"ら","r":"ra"},{"k":"る","r":"ru"},{"k":"れ","r":"re"},{"k":"ろ","r":"ro"},{"k":"わ","r":"wa"}]},{"name":"diphthong_1","cards":[{"k":"きゃ","r":"kya"},{"k":"きゅ","r":"kyu"},{"k":"きょ","r":"kyo"},{"k":"しゃ","r":"sha"},{"k":"しゅ","r":"shu"},{"k":"しょ","r":"sho"},{"k":"ちゃ","r":"cha"},{"k":"ちゅ","r":"chu"},{"k":"ちょ","r":"cho"},{"k":"にゃ","r":"nya"},{"k":"にゅ","r":"nyu"},{"k":"にょ","r":"nyo"},{"k":"ひゃ","r":"hya"},{"k":"ひゅ","r":"hyu"},{"k":"ひょ","r":"hyo"},{"k":"じゃ","r":"ja"},{"k":"じゅ","r":"ju"},{"k":"じょ","r":"jo"}]},{"name":"diphthong_2","cards":[{"k":"みゃ","r":"mya"},{"k":"みゅ","r":"myu"},{"k":"みょ","r":"myo"},{"k":"りゃ","r":"rya"},{"k":"りゅ","r":"ryu"},{"k":"りょ","r":"ryo"},{"k":"ぎゃ","r":"gya"},{"k":"ぎゅ","r":"gyu"},{"k":"ぎょ","r":"gyo"},{"k":"ぢゃ","r":"ja"},{"k":"ぢゅ","r":"ju"},{"k":"ぢょ","r":"jo"},{"k":"びゃ","r":"bya"},{"k":"びゅ","r":"byu"},{"k":"びょ","r":"byo"},{"k":"ぴゃ","r":"pya"},{"k":"ぴゅ","r":"pyu"},{"k":"ぴょ","r":"pyo"}]}];
 
+// short enough to sit on a half-width tile without wrapping past two lines,
+// and free of kana so one set of titles serves both scripts
+// which character stands for each group on its tile: the one that says most
+// about what is inside, not just whichever happens to be first
+const MARK_AT = [0, 5, 0, 10, 15, 0, 0, 0];
 const DISPLAY = [
-  { title: "Vowels · K · S" },
-  { title: "T · N · H" },
-  { title: "M · Y · R · W" },
-  { title: "Voiced: G · D" },
-  { title: "Voiced: Z · B · P" },
-  { title: "Look-alikes" },
-  { title: "Combos ゃゅょ I" },
-  { title: "Combos ゃゅょ II" },
+  "Vowels · K · S",
+  "T · N · H",
+  "M · Y · R · W",
+  "Voiced G · D",
+  "Voiced Z · B · P",
+  "Look-alikes",
+  "Combos I",
+  "Combos II",
 ];
+
+// Katakana sits one block above hiragana, so every deck but one converts
+// character for character and stays in step with its hiragana twin.
+function toKatakana(str) {
+  return str.replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60));
+}
+// the exception: which characters are easy to confuse is a fact about the
+// shapes, not about the sounds, so katakana needs its own look-alike set
+const KATAKANA_SIMILAR = [
+  { k: "ツ", r: "tsu" }, { k: "シ", r: "shi" }, { k: "ソ", r: "so" }, { k: "ン", r: "n" },
+  { k: "ノ", r: "no" }, { k: "メ", r: "me" }, { k: "ヌ", r: "nu" }, { k: "ス", r: "su" },
+  { k: "ク", r: "ku" }, { k: "タ", r: "ta" }, { k: "ワ", r: "wa" }, { k: "ウ", r: "u" },
+  { k: "フ", r: "fu" }, { k: "ヲ", r: "wo" }, { k: "コ", r: "ko" }, { k: "ユ", r: "yu" },
+  { k: "エ", r: "e" }, { k: "ア", r: "a" }, { k: "マ", r: "ma" }, { k: "ム", r: "mu" },
+];
+const KATAKANA = HIRAGANA.map(g => ({
+  name: g.name,
+  cards: g.name === "similar" ? KATAKANA_SIMILAR
+       : g.cards.map(c => ({ k: toKatakana(c.k), r: c.r })),
+}));
+const SCRIPTS = {
+  hira: { groups: HIRAGANA, seal: "あ" },
+  kata: { groups: KATAKANA, seal: "ア" },
+};
 
 // Spaced-repetition constants, ported from the original app:
 // a card at level L waits nextByLevel[L] questions before it is due again.
@@ -429,15 +521,25 @@ function loadStore() {
 // the rename to Yomikana started the store over; don't leave the old one behind
 try { localStorage.removeItem(LEGACY_KEY); } catch (e) { /* nothing to clean */ }
 const store = loadStore();
+// decks saved before katakana existed are keyed by bare group name, and every
+// one of them is a hiragana deck
+for (const bag of [store.groups, store.fails]) {
+  for (const k of Object.keys(bag)) {
+    if (k.indexOf(":") === -1) { bag["hira:" + k] = bag[k]; delete bag[k]; }
+  }
+}
+let script = store.settings.script === "kata" ? "kata" : "hira";
+let GROUPS = SCRIPTS[script].groups;
+function groupKey(gi) { return script + ":" + GROUPS[gi].name; }
 function saveStore() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) { /* private mode etc. */ }
 }
 function groupState(gi) {
-  const name = GROUPS[gi].name;
-  let arr = store.groups[name];
+  const key = groupKey(gi);
+  let arr = store.groups[key];
   if (!arr || arr.length !== GROUPS[gi].cards.length) {
     arr = GROUPS[gi].cards.map(() => [0, 0, 0]); // [level, next, introduced]
-    store.groups[name] = arr;
+    store.groups[key] = arr;
   }
   // decks saved before the introduced flag existed: anything above level 0 has
   // plainly been seen, so it should not be re-announced as new
@@ -503,19 +605,44 @@ function renderHome() {
   GROUPS.forEach((g, gi) => {
     const st = groupState(gi);
     const mastered = st.filter(c => c[0] >= MAX_LEVEL - 1).length;
+    const full = mastered === g.cards.length;
+    const mark = g.cards[MARK_AT[gi]].k;
     const li = document.createElement("li");
     const btn = document.createElement("button");
-    btn.className = "group-card";
+    btn.className = "group-card" + (full ? " full" : "");
+    btn.setAttribute("aria-label",
+      DISPLAY[gi] + ", " + mastered + " of " + g.cards.length + " mastered");
     btn.innerHTML =
-      '<div class="group-head"><span class="group-name">' + (gi + 1) + ". " + DISPLAY[gi].title +
-      '</span><span class="group-count"><b>' + mastered + "</b> / " + g.cards.length + "</span></div>" +
-      '<div class="group-preview kana-font">' + g.cards.map(c => c.k).join(" ") + "</div>" +
-      '<div class="group-bar"><div style="width:' + (100 * mastered / g.cards.length) + '%"></div></div>';
+      '<span class="group-top"><span class="group-index mono">' + (gi + 1) + "</span>" +
+      '<span class="group-count" aria-hidden="true"><b>' + mastered + "</b>/" + g.cards.length +
+      "</span></span>" +
+      '<span class="group-mark kana-font' + (mark.length > 1 ? " two" : "") +
+      '" aria-hidden="true">' + mark + "</span>" +
+      '<span class="group-name">' + DISPLAY[gi] + "</span>" +
+      '<span class="group-bar"><i style="width:' + (100 * mastered / g.cards.length) + '%"></i></span>';
     btn.addEventListener("click", () => startSession(gi));
     li.appendChild(btn);
     groupListEl.appendChild(li);
   });
 }
+
+/* ---------- script switch ---------- */
+const scriptBtns = [...document.querySelectorAll(".script-switch button")];
+function applyScript() {
+  document.getElementById("brandSeal").textContent = SCRIPTS[script].seal;
+  scriptBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.script === script)));
+}
+scriptBtns.forEach(b => b.addEventListener("click", () => {
+  if (b.dataset.script === script) return;
+  script = b.dataset.script;
+  GROUPS = SCRIPTS[script].groups;
+  store.settings.script = script;
+  saveStore();
+  applyScript();
+  renderHome();
+  showReset("button");
+}));
+applyScript();
 
 /* ---------- reset ---------- */
 // Two taps rather than a confirm() dialog: this wipes every group, and a modal
@@ -556,14 +683,14 @@ function startSession(gi) {
     lastKnown: false,     // true right after a filler question of a mastered card
     current: -1,
     failed: false,        // wrong answer given on the current display
-    fails: store.fails[GROUPS[gi].name] || 0,
+    fails: store.fails[groupKey(gi)] || 0,
     sinceNew: NEW_COOLDOWN,  // questions since the last new character
 
     phase: "question",
     celebrated: groupState(gi).every(c => c[0] >= MAX_LEVEL - 1),
     shownAt: 0,
   };
-  document.getElementById("sessionTitle").textContent = DISPLAY[gi].title;
+  document.getElementById("sessionTitle").textContent = DISPLAY[gi];
   homeEl.classList.add("hidden");
   sessionEl.classList.remove("hidden");
   showQuestion();
@@ -751,7 +878,7 @@ function answer(btn) {
     card[0] = 0;
     card[1] = 0;
     S.fails++;
-    store.fails[GROUPS[S.gi].name] = S.fails;
+    store.fails[groupKey(S.gi)] = S.fails;
     saveStore();
     btn.classList.add("wrong");
     btn.disabled = true;
