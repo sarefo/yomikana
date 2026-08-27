@@ -601,6 +601,11 @@ const NEW_AFTER_LEVEL = 3;
 const WORKING_SET = 4;
 const NEW_COOLDOWN = 8;
 
+// How long the reading direction keeps the answered character on the screen
+// while its sound plays. Long enough to tie the two together, short enough
+// that a run of easy answers still feels like a drill.
+const READ_HOLD = 550;
+
 // A session has no natural end — the filler pass can serve questions forever
 // — so it is cut into rounds: every ROUND_LEN resolved questions the drill
 // pauses at a checkpoint and asks whether to keep going.
@@ -659,7 +664,7 @@ function decayCard(c, now) {
 // Shown at the foot of the home screen so a phone can tell whether the newest
 // build has actually landed. Bump on every release, together with the CACHE
 // name in sw.js.
-const APP_VERSION = "v5";
+const APP_VERSION = "v6";
 
 const STORE_KEY = "yomikana-v1";
 const LEGACY_KEY = "hiragana-v1";  // the pre-rename store, no longer read
@@ -765,8 +770,10 @@ if ("speechSynthesis" in window) {
   pickVoice();
   speechSynthesis.addEventListener("voiceschanged", pickVoice);
 }
+// Returns whether anything was actually said, so a caller can hold the screen
+// for it — a sound is only worth waiting on if it is coming.
 function speak(kana) {
-  if (store.settings.sound === false || !("speechSynthesis" in window)) return;
+  if (store.settings.sound === false || !("speechSynthesis" in window)) return false;
   try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(kana);
@@ -775,7 +782,9 @@ function speak(kana) {
     u.lang = jaVoice ? jaVoice.lang : "ja-JP";
     u.rate = 0.85;
     speechSynthesis.speak(u);
+    return true;
   } catch (e) { /* audio is optional */ }
+  return false;
 }
 
 /* ---------- home ---------- */
@@ -1270,9 +1279,11 @@ function answer(btn) {
     return;
   }
 
-  // in the reading direction the sound arrives as the reward for the right
-  // answer — given with the question it would have handed the answer over
-  if (dir === "read") speak(kanaOf(S.current));
+  // In the reading direction the sound arrives as the reward for the right
+  // answer — given with the question it would have handed the answer over, and
+  // given on a wrong tap it would either do the same or name a character that
+  // is not on the screen. A miss earns it too, once the right one is found.
+  const spoke = dir === "read" && speak(kanaOf(S.current));
 
   if (!S.failed) {
     // answering with a known rival on the buttons and not falling for it is a
@@ -1297,8 +1308,25 @@ function answer(btn) {
   saveStore();
   renderHud();
   S.round++;
-  // advance synchronously: the next question's audio has to be spoken inside
-  // this click, or Chrome on Android drops it for want of a user gesture
+  if (spoke) {
+    // the sound is the answer to the character on the screen, so the screen
+    // waits for it. Advancing underneath it — which is what a synchronous
+    // hand-off does, speech being asynchronous — reads as the app pronouncing
+    // the next character, and teaches the wrong pairing.
+    btn.classList.add("correct");
+    stage.querySelectorAll(".answer").forEach(b => { b.disabled = true; });
+    setTimeout(advance, READ_HOLD);
+  } else {
+    // advance synchronously: the next question's audio has to be spoken inside
+    // this click, or Chrome on Android drops it for want of a user gesture
+    advance();
+  }
+}
+
+function advance() {
+  // the hold is the one moment a question outlives its click: leaving during it
+  // has to win, or the drill reappears on top of the home screen
+  if (!S) return;
   if (S.comparePair) {
     renderCompare();
   } else if (!S.celebrated && S.cards.every(c => c[0] >= MAX_LEVEL - 1)) {
