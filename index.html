@@ -154,6 +154,36 @@ button:focus-visible, a:focus-visible {
    screen: a small phone loses tile height, never a row. The 17rem is
    everything the grid is not — the view's padding, the topbar, the script
    switch, the reset strip and the three gaps between the rows. */
+/* The way back into everything already learned. It sits above the deck rather
+   than in it because what has gone stale is spread across the groups, not
+   parked in any one of them; it stays hidden until there is something to
+   refresh, so a first run still shows the eight tiles and nothing else. */
+.refresh-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: .1rem .625rem;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: .55rem .75rem;
+  margin-bottom: .625rem;
+  box-shadow: var(--shadow);
+  transition: transform .15s, box-shadow .15s, border-color .15s;
+}
+.refresh-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-lift); border-color: var(--border-strong); }
+.refresh-card:active { transform: translateY(0); }
+.refresh-card > svg { width: 1.15rem; height: 1.15rem; grid-row: span 2; color: var(--indigo); }
+.refresh-card.rusty > svg { color: var(--warn); }
+.refresh-title { display: flex; align-items: baseline; gap: .4rem; font-weight: 650; font-size: .88rem; }
+.refresh-count { font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.refresh-count b { color: var(--indigo); font-weight: 650; }
+.refresh-sub { font-size: .72rem; color: var(--muted); }
+.refresh-bar { grid-column: 1 / -1; height: .25rem; margin-top: .4rem; border-radius: 999px; background: var(--indigo-soft); overflow: hidden; }
+.refresh-bar > i { display: block; height: 100%; background: var(--indigo); border-radius: 999px; transition: width .3s; }
+
 .groups {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -161,6 +191,11 @@ button:focus-visible, a:focus-visible {
   grid-auto-rows: clamp(3.5rem, calc((100dvh - 17rem) / 4), 7.5rem);
   list-style: none;
 }
+/* with the refresh strip showing, the rows give up its height and the gap
+   under it -- measured at 5.07rem together -- so the deck still lands on one
+   screen. The floor drops a little too: on a short phone the strip is worth
+   more than the last quarter-rem of tile height. */
+#home.has-refresh .groups { grid-auto-rows: clamp(3.25rem, calc((100dvh - 22rem) / 4), 7.5rem); }
 .group-card {
   width: 100%;
   height: 100%;
@@ -424,6 +459,12 @@ button:focus-visible, a:focus-visible {
     <button role="tab" data-script="hira" aria-selected="true"><span class="native kana-font">ひらがな</span>Hiragana</button>
     <button role="tab" data-script="kata" aria-selected="false"><span class="native kana-font">カタカナ</span>Katakana</button>
   </div>
+  <button id="refreshCard" class="refresh-card hidden">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+    <span class="refresh-title">Refresh<span class="refresh-count mono"></span></span>
+    <span class="refresh-sub"></span>
+    <span class="refresh-bar"><i></i></span>
+  </button>
   <ul id="groupList" class="groups"></ul>
   <div class="home-foot">
     <div class="reset-zone">
@@ -497,6 +538,12 @@ const SCRIPTS = {
 const NEXT_BY_LEVEL = [0, 1, 5, 10, 20];
 const MAX_LEVEL = NEXT_BY_LEVEL.length; // levels run 0..4
 
+// A tile counts what has been learned; the refresh strip counts what is still
+// sharp. They need different thresholds, because decay costs the top level
+// first: with one bar doing both jobs, six weeks away turns a deck the learner
+// still knows perfectly well into 0/15 and reads as erased rather than rusty.
+const LEARNED_AT = MAX_LEVEL - 2;
+
 // How long a new character has to wait its turn. All three have to be clear
 // before one is introduced: every character already on the table answered right
 // at least NEW_AFTER_LEVEL times, no more than WORKING_SET of them still short
@@ -506,6 +553,56 @@ const MAX_LEVEL = NEXT_BY_LEVEL.length; // levels run 0..4
 const NEW_AFTER_LEVEL = 3;
 const WORKING_SET = 4;
 const NEW_COOLDOWN = 6;
+
+// Levels also fade with wall-clock time, not only with questions asked. The
+// waits above are counted in questions, so they stop the moment the tab is
+// closed: without this a deck left alone for two months still reads as
+// mastered and offers nothing to do. DECAY_DAYS[L] is how long a card sitting
+// at level L survives untouched before it slips a level; level 0 has nothing
+// left to lose, and an introduced card never falls past DECAY_FLOOR, because
+// coming back after a long absence should schedule a refresh rather than read
+// as erased progress.
+//
+// The lower windows are wide on purpose. These are not estimates of when a
+// character is forgotten; they are how fast the app is willing to walk you
+// back down. Tight ones cascade: 30/10/5 sends a mastered card to the floor
+// after seven weeks away, and the deck you left full reads as untouched. At
+// 30/21/14 a six-week absence costs two levels and it takes better than two
+// months to lose the lot, which is about when that is honestly true.
+const DECAY_DAYS = [0, 0, 14, 21, 30];
+const DECAY_FLOOR = 1;
+
+// Characters that get missed a lot earn shorter waits and faster decay: a
+// character you keep getting wrong is not the one that survives a fortnight
+// untouched. The cap keeps one terrible afternoon from pinning a card at the
+// bottom for good.
+const MISS_CAP = 6;
+const MISS_WEIGHT = 0.25;
+
+function today() { return Math.floor(Date.now() / 864e5); }
+// 1 for a card never missed, up to 2.5 for the worst of them. It divides the
+// waits and the decay windows, and weights the draw among mastered cards.
+function leech(card) { return 1 + Math.min(card[4] || 0, MISS_CAP) * MISS_WEIGHT; }
+
+// Walk a card down however many levels its time away has cost it. The days
+// each drop consumes are taken off the clock rather than discarded, so a
+// return after ten weeks lands where it should instead of costing one level.
+function decayCard(c, now) {
+  let elapsed = now - c[3];
+  if (elapsed <= 0) return false;
+  const f = leech(c);
+  let dropped = false;
+  while (c[0] > DECAY_FLOOR && DECAY_DAYS[c[0]]) {
+    const window = Math.max(1, Math.round(DECAY_DAYS[c[0]] / f));
+    if (elapsed < window) break;
+    elapsed -= window;
+    c[0]--;
+    c[1] = 0;            // a faded card is due at once
+    dropped = true;
+  }
+  if (dropped) c[3] = now - elapsed;
+  return dropped;
+}
 
 const STORE_KEY = "yomikana-v1";
 const LEGACY_KEY = "hiragana-v1";  // the pre-rename store, no longer read
@@ -534,18 +631,28 @@ function groupKey(gi) { return script + ":" + GROUPS[gi].name; }
 function saveStore() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) { /* private mode etc. */ }
 }
+// [level, next, introduced, lastDay, misses]
 function groupState(gi) {
   const key = groupKey(gi);
+  const now = today();
   let arr = store.groups[key];
   if (!arr || arr.length !== GROUPS[gi].cards.length) {
-    arr = GROUPS[gi].cards.map(() => [0, 0, 0]); // [level, next, introduced]
+    arr = GROUPS[gi].cards.map(() => [0, 0, 0, now, 0]);
     store.groups[key] = arr;
   }
-  // decks saved before the introduced flag existed: anything above level 0 has
-  // plainly been seen, so it should not be re-announced as new
+  let dirty = false;
   for (let i = 0; i < arr.length; i++) {
-    if (arr[i].length < 3) arr[i][2] = arr[i][0] > 0 ? 1 : 0;
+    const c = arr[i];
+    // decks saved before the introduced flag existed: anything above level 0
+    // has plainly been seen, so it should not be re-announced as new
+    if (c.length < 3) c[2] = c[0] > 0 ? 1 : 0;
+    // decks saved before decay: start their clock today rather than at the
+    // epoch, so installing this version does not fade anybody's progress
+    if (c.length < 4) { c[3] = now; dirty = true; }
+    if (c.length < 5) { c[4] = 0; dirty = true; }
+    if (c[2] && decayCard(c, now)) dirty = true;
   }
+  if (dirty) saveStore();
   return arr;
 }
 
@@ -599,27 +706,75 @@ function speak(kana) {
 const homeEl = document.getElementById("home");
 const sessionEl = document.getElementById("session");
 const groupListEl = document.getElementById("groupList");
+const refreshEl = document.getElementById("refreshCard");
+
+// Everything introduced in the current script, one entry per character. Some
+// characters sit in more than one group -- た is in three, and the look-alike
+// deck borrows from everywhere -- so without folding them together a mixed
+// question could offer the same kana on two buttons.
+function reviewDeck() {
+  const byKana = new Map();
+  GROUPS.forEach((g, gi) => {
+    const st = groupState(gi);
+    const key = groupKey(gi);
+    g.cards.forEach((card, ci) => {
+      if (!st[ci][2]) return;
+      let e = byKana.get(card.k);
+      if (!e) { e = { k: card.k, r: card.r, refs: [], keys: [] }; byKana.set(card.k, e); }
+      e.refs.push(st[ci]);
+      e.keys.push(key);
+    });
+  });
+  // weakest copy first: a refresh should meet the character in the group where
+  // it is shakiest, and the answer is written back to all of them either way
+  for (const e of byKana.values()) {
+    e.refs.sort((a, b) => (a[0] - b[0]) || ((b[4] || 0) - (a[4] || 0)));
+  }
+  return [...byKana.values()];
+}
+
+function renderRefresh() {
+  const deck = reviewDeck();
+  const total = deck.length;
+  homeEl.classList.toggle("has-refresh", total > 0);
+  refreshEl.classList.toggle("hidden", total === 0);
+  if (!total) return;
+  let rusty = 0;
+  for (const e of deck) if (e.refs[0][0] < MAX_LEVEL - 1) rusty++;
+  const solid = total - rusty;
+  refreshEl.classList.toggle("rusty", rusty > 0);
+  refreshEl.querySelector(".refresh-count").innerHTML = "<b>" + solid + "</b>/" + total;
+  refreshEl.querySelector(".refresh-sub").textContent = rusty
+    ? rusty + (rusty === 1 ? " character wants" : " characters want") + " another look"
+    : "all " + total + " are fresh — a round keeps them that way";
+  refreshEl.querySelector(".refresh-bar > i").style.width = (100 * solid / total) + "%";
+  refreshEl.setAttribute("aria-label",
+    "Refresh, " + rusty + " of " + total + " characters need another look");
+}
+refreshEl.addEventListener("click", () => startSession(REVIEW));
 
 function renderHome() {
+  renderRefresh();
   groupListEl.innerHTML = "";
   GROUPS.forEach((g, gi) => {
     const st = groupState(gi);
-    const mastered = st.filter(c => c[0] >= MAX_LEVEL - 1).length;
-    const full = mastered === g.cards.length;
+    const learned = st.filter(c => c[0] >= LEARNED_AT).length;
+    // green is still reserved for the whole group sitting at the top level
+    const full = st.every(c => c[0] >= MAX_LEVEL - 1);
     const mark = g.cards[MARK_AT[gi]].k;
     const li = document.createElement("li");
     const btn = document.createElement("button");
     btn.className = "group-card" + (full ? " full" : "");
     btn.setAttribute("aria-label",
-      DISPLAY[gi] + ", " + mastered + " of " + g.cards.length + " mastered");
+      DISPLAY[gi] + ", " + learned + " of " + g.cards.length + " learned");
     btn.innerHTML =
       '<span class="group-top"><span class="group-index mono">' + (gi + 1) + "</span>" +
-      '<span class="group-count" aria-hidden="true"><b>' + mastered + "</b>/" + g.cards.length +
+      '<span class="group-count" aria-hidden="true"><b>' + learned + "</b>/" + g.cards.length +
       "</span></span>" +
       '<span class="group-mark kana-font' + (mark.length > 1 ? " two" : "") +
       '" aria-hidden="true">' + mark + "</span>" +
       '<span class="group-name">' + DISPLAY[gi] + "</span>" +
-      '<span class="group-bar"><i style="width:' + (100 * mastered / g.cards.length) + '%"></i></span>';
+      '<span class="group-bar"><i style="width:' + (100 * learned / g.cards.length) + '%"></i></span>';
     btn.addEventListener("click", () => startSession(gi));
     li.appendChild(btn);
     groupListEl.appendChild(li);
@@ -675,22 +830,38 @@ document.getElementById("resetYes").addEventListener("click", () => {
 const stage = document.getElementById("stage");
 let S = null; // active session
 
+const REVIEW = -1;  // the mixed refresh deck, in place of a group index
+
+// One group, in the same shape reviewDeck() produces, so everything downstream
+// of here can stop caring which kind of session it is running.
+function deckForGroup(gi) {
+  const st = groupState(gi);
+  const key = groupKey(gi);
+  return GROUPS[gi].cards.map((c, ci) => ({ k: c.k, r: c.r, refs: [st[ci]], keys: [key] }));
+}
+
 function startSession(gi) {
+  const review = gi === REVIEW;
+  const deck = review ? reviewDeck() : deckForGroup(gi);
+  if (!deck.length) return;
   S = {
     gi,
-    cards: groupState(gi),
+    deck,
+    cards: deck.map(e => e.refs[0]),
+    failKey: review ? script + ":review" : groupKey(gi),
     forced: -1,           // index to re-ask immediately after a miss; -1 = none
     lastKnown: false,     // true right after a filler question of a mastered card
     current: -1,
     failed: false,        // wrong answer given on the current display
-    fails: store.fails[groupKey(gi)] || 0,
+    fails: store.fails[review ? script + ":review" : groupKey(gi)] || 0,
     sinceNew: NEW_COOLDOWN,  // questions since the last new character
 
     phase: "question",
-    celebrated: groupState(gi).every(c => c[0] >= MAX_LEVEL - 1),
+    // a refresh has no finish line to celebrate: it runs until you leave
+    celebrated: review || deck.every(e => e.refs[0][0] >= MAX_LEVEL - 1),
     shownAt: 0,
   };
-  document.getElementById("sessionTitle").textContent = DISPLAY[gi];
+  document.getElementById("sessionTitle").textContent = review ? "Refresh" : DISPLAY[gi];
   homeEl.classList.add("hidden");
   sessionEl.classList.remove("hidden");
   showQuestion();
@@ -731,11 +902,15 @@ function selectQuestion() {
   if (S.forced !== -1) return S.forced;
 
   // pass 1: weakest due card among those already introduced. A missed card sits
-  // at level 0 with no wait left, so it lands here first.
-  let best = -1, bestLevel = MAX_LEVEL - 1;
+  // at level 0 with no wait left, so it lands here first. Ties go to whichever
+  // card has been missed most often -- that is the one wanting the repetition.
+  let best = -1, bestLevel = MAX_LEVEL - 1, bestMiss = -1;
   for (let i = 0; i < cards.length; i++) {
-    if (!cards[i][2]) continue;
-    if (cards[i][1] === 0 && cards[i][0] < bestLevel) { bestLevel = cards[i][0]; best = i; }
+    const c = cards[i];
+    if (!c[2] || c[1] !== 0 || c[0] >= MAX_LEVEL - 1) continue;
+    if (c[0] < bestLevel || (c[0] === bestLevel && (c[4] || 0) > bestMiss)) {
+      bestLevel = c[0]; bestMiss = c[4] || 0; best = i;
+    }
   }
   if (best !== -1) { S.lastKnown = false; return best; }
 
@@ -751,24 +926,40 @@ function selectQuestion() {
   // what is on the table instead of moving on. Once the group is fully
   // introduced it alternates with the filler below, so mastered characters
   // keep coming back too.
+  // Misses count as time already served, so a character that keeps going wrong
+  // jumps the queue ahead of one that is merely due at the same moment.
   if (fresh !== -1 || S.lastKnown) {
     best = -1;
     let bestNext = Infinity;
     for (let i = 0; i < cards.length; i++) {
       if (!cards[i][2] || cards[i][0] >= MAX_LEVEL - 1) continue;
-      if (cards[i][1] < bestNext) { bestNext = cards[i][1]; best = i; }
+      const due = cards[i][1] / leech(cards[i]);
+      if (due < bestNext) { bestNext = due; best = i; }
     }
     if (best !== -1) { S.lastKnown = false; return best; }
   }
 
-  // pass 4: filler — a random mastered card
+  // pass 4: filler — a mastered card, drawn with a weight rather than evenly,
+  // so the ones that have gone wrong before come round more often than the ones
+  // that never have. On a refresh this is most of the session.
   S.lastKnown = true;
-  const mastered = [];
+  const mastered = [], weights = [];
+  let total = 0;
   for (let i = 0; i < cards.length; i++) {
-    if (cards[i][0] >= MAX_LEVEL - 1) mastered.push(i);
+    if (cards[i][0] >= MAX_LEVEL - 1) {
+      const w = leech(cards[i]);
+      mastered.push(i);
+      weights.push(w);
+      total += w;
+    }
   }
   if (mastered.length === 0) return fresh !== -1 ? fresh : 0;
-  return mastered[Math.floor(Math.random() * mastered.length)];
+  let roll = Math.random() * total;
+  for (let n = 0; n < mastered.length; n++) {
+    roll -= weights[n];
+    if (roll <= 0) return mastered[n];
+  }
+  return mastered[mastered.length - 1];
 }
 
 function showQuestion() {
@@ -798,8 +989,20 @@ function showQuestion() {
 }
 
 /* ---------- rendering ---------- */
-function kanaOf(i) { return GROUPS[S.gi].cards[i].k; }
-function romajiOf(i) { return GROUPS[S.gi].cards[i].r; }
+function kanaOf(i) { return S.deck[i].k; }
+function romajiOf(i) { return S.deck[i].r; }
+
+// A character in several groups is answered once and recorded in all of them:
+// leaving the other copies behind would have a refresh raise your reading of
+// た while three group tiles went on claiming it was never learned.
+function syncRefs(entry) {
+  const src = entry.refs[0];
+  for (let i = 1; i < entry.refs.length; i++) {
+    const r = entry.refs[i];
+    r[0] = src[0]; r[1] = src[1]; r[3] = src[3];
+    r[4] = Math.max(r[4] || 0, src[4]);
+  }
+}
 
 // ported from the original's ProgressView: `done` is accumulated levels over
 // the maximum, `clean` the part of it that was not paid for with a miss
@@ -827,13 +1030,23 @@ function renderQuestion(isNew) {
   S.phase = "question";
   const correct = S.current;
 
-  // 3 distractors: other cards from the same group
-  const pool = GROUPS[S.gi].cards;
+  // 3 distractors from the same deck. Two rules the single-group deck never
+  // needed: nothing that answers the prompt just as well (a mixed refresh holds
+  // both じ and ぢ, and away from their own groups both are "ji"), and a
+  // preference for characters that share a group with the right one. Drawn flat
+  // from a hundred kana the choices would be trivially far apart, which would
+  // make a refresh easier than the drill it is refreshing.
+  const pool = S.deck;
+  const near = [], far = [];
+  for (let i = 0; i < pool.length; i++) {
+    if (i === correct || pool[i].r === pool[correct].r) continue;
+    (pool[i].keys.some(k => pool[correct].keys.includes(k)) ? near : far).push(i);
+  }
   const picks = [correct];
-  let guard = 0;
-  while (picks.length < 4 && picks.length < pool.length && guard++ < 500) {
-    const i = Math.floor(Math.random() * pool.length);
-    if (!picks.includes(i)) picks.push(i);
+  for (const bag of [near, far]) {
+    while (picks.length < 4 && bag.length) {
+      picks.push(bag.splice(Math.floor(Math.random() * bag.length), 1)[0]);
+    }
   }
   const pos = Math.floor(Math.random() * picks.length);
   [picks[0], picks[pos]] = [picks[pos], picks[0]];
@@ -868,7 +1081,9 @@ function answer(btn) {
   // questions advance the instant one is answered, so swallow the tail of a
   // double tap instead of letting it answer the question that just appeared
   if (performance.now() - S.shownAt < 130) return;
+  const entry = S.deck[S.current];
   const card = S.cards[S.current];
+  const now = today();
 
   if (Number(btn.dataset.i) !== S.current) {
     // miss: the card drops to zero, but the screen stays put — the question is
@@ -877,8 +1092,16 @@ function answer(btn) {
     S.forced = S.current;
     card[0] = 0;
     card[1] = 0;
+    card[3] = now;
+    card[4] = (card[4] || 0) + 1;  // and from now on it comes back sooner
     S.fails++;
-    store.fails[groupKey(S.gi)] = S.fails;
+    store.fails[S.failKey] = S.fails;
+    // a miss during a refresh still belongs to the groups the character lives
+    // in, so their own tiles and pies stay honest about it
+    if (S.gi === REVIEW) {
+      for (const k of entry.keys) store.fails[k] = (store.fails[k] || 0) + 1;
+    }
+    syncRefs(entry);
     saveStore();
     btn.classList.add("wrong");
     btn.disabled = true;
@@ -890,9 +1113,15 @@ function answer(btn) {
     S.forced = -1;
     if (card[0] < MAX_LEVEL - 1) {
       card[0]++;
-      card[1] = NEXT_BY_LEVEL[card[0]];
+      const base = NEXT_BY_LEVEL[card[0]];
+      card[1] = base ? Math.max(1, Math.round(base / leech(card))) : 0;
+      // reaching the top forgives half the misses: a rough start should not
+      // mark a character for life once it is plainly known
+      if (card[0] >= MAX_LEVEL - 1) card[4] = card[4] >> 1;
     }
   }
+  card[3] = now;
+  syncRefs(entry);
   saveStore();
   renderHud();
   // advance synchronously: the next question's audio has to be spoken inside
