@@ -710,7 +710,7 @@ function decayCard(c, now) {
 // Shown at the foot of the home screen so a phone can tell whether the newest
 // build has actually landed. Bump on every release, together with the CACHE
 // name in sw.js.
-const APP_VERSION = "v14";
+const APP_VERSION = "v15";
 
 const STORE_KEY = "yomikana-v1";
 const LEGACY_KEY = "hiragana-v1";  // the pre-rename store, no longer read
@@ -732,6 +732,11 @@ for (const bag of [store.groups, store.fails]) {
   for (const k of Object.keys(bag)) {
     if (k.indexOf(":") === -1) { bag["hira:" + k] = bag[k]; delete bag[k]; }
   }
+}
+// confusions saved before they were counted by direction: a bare pair cannot
+// say which way the mistake ran, and a hint is no loss to start over on
+for (const k of Object.keys(store.pairs)) {
+  if (k.indexOf(">") === -1) delete store.pairs[k];
 }
 // and decks saved before directions existed all drilled sound → kana
 for (const bag of [store.groups, store.fails]) {
@@ -757,7 +762,18 @@ function saveStore() {
 // learner up is rarely た by itself but た-against-だ, and the cure — meeting
 // the rival again — needs both names. Kana are unique across the two scripts,
 // so the key needs no script prefix.
+//
+// Counted, though, they are ordered: taking た for だ is a different mistake
+// from taking だ for た, and the easier of the two must not be able to pay off
+// the harder one's debt. Recognizing だ when だ is the prompt says nothing
+// about whether た still looks like だ when た is.
+function missKey(asked, tapped) { return asked + ">" + tapped; }
 function pairKey(a, b) { return a < b ? a + "|" + b : b + "|" + a; }
+// how often the two have been mixed up, whichever way round it ran: which
+// characters need to keep meeting on the buttons is a fact about the pair
+function pairCount(a, b) {
+  return (store.pairs[missKey(a, b)] || 0) + (store.pairs[missKey(b, a)] || 0);
+}
 // [level, next, introduced, lastDay, misses]
 function groupState(gi) {
   const key = groupKey(gi);
@@ -1341,14 +1357,14 @@ function renderQuestion(isNew) {
   const near = [], far = [], rivals = [];
   for (let i = 0; i < pool.length; i++) {
     if (i === correct || pool[i].r === pool[correct].r) continue;
-    if (store.pairs[pairKey(pool[i].k, pool[correct].k)]) { rivals.push(i); continue; }
+    if (pairCount(pool[i].k, pool[correct].k)) { rivals.push(i); continue; }
     (pool[i].keys.some(k => pool[correct].keys.includes(k)) ? near : far).push(i);
   }
   // recorded rivals take seats first: telling the pair apart is exactly the
   // discrimination worth practicing, so they keep meeting on the buttons —
   // with the red/green verdict right there — until the confusion is worked off
   rivals.sort((a, b) =>
-    store.pairs[pairKey(pool[b].k, pool[correct].k)] - store.pairs[pairKey(pool[a].k, pool[correct].k)]);
+    pairCount(pool[b].k, pool[correct].k) - pairCount(pool[a].k, pool[correct].k));
   const picks = [correct, ...rivals.splice(0, 2)];
   near.push(...rivals);
   for (const bag of [near, far]) {
@@ -1426,12 +1442,13 @@ function answer(btn) {
     card[1] = 0;
     card[3] = now;
     card[4] = (card[4] || 0) + 1;  // and from now on it comes back sooner
-    const pk = pairKey(entry.k, S.deck[chosen].k);
-    const seen = Math.min((store.pairs[pk] || 0) + 1, 9);
-    store.pairs[pk] = seen;
+    const mk = missKey(entry.k, S.deck[chosen].k);
+    store.pairs[mk] = Math.min((store.pairs[mk] || 0) + 1, 9);
     // a repeat of a known confusion has earned a side-by-side look once the
-    // question resolves; a first slip is just a miss
-    if (seen >= 2 && !S.compared.has(pk)) {
+    // question resolves; a first slip is just a miss. Either order counts
+    // toward it — the screen answers a muddled pair, not a muddled direction
+    const pk = pairKey(entry.k, S.deck[chosen].k);
+    if (pairCount(entry.k, S.deck[chosen].k) >= 2 && !S.compared.has(pk)) {
       S.compared.add(pk);
       S.comparePair = [S.current, chosen];
     }
@@ -1463,11 +1480,14 @@ function answer(btn) {
 
   if (!S.failed) {
     // answering with a known rival on the buttons and not falling for it is a
-    // won discrimination, and works the recorded confusion back off the books
+    // won discrimination, and works the recorded confusion back off the books —
+    // but only the one that was on trial. This question asked entry.k and the
+    // rival was there to be fallen for; that だ was not taken for た says
+    // nothing yet about た being taken for だ, which is its own debt.
     for (const i of S.picks) {
       if (i === S.current) continue;
-      const pk = pairKey(entry.k, S.deck[i].k);
-      if (store.pairs[pk] && --store.pairs[pk] === 0) delete store.pairs[pk];
+      const mk = missKey(entry.k, S.deck[i].k);
+      if (store.pairs[mk] && --store.pairs[mk] === 0) delete store.pairs[mk];
     }
     S.forced = -1;
     if (card[0] < MAX_LEVEL - 1) {
