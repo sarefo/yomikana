@@ -56,7 +56,7 @@
   --shadow-lift: none;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { -webkit-text-size-adjust: 100%; height: 100%; }
+html { -webkit-text-size-adjust: 100%; height: 100%; overscroll-behavior: none; }
 body {
   background: var(--bg);
   color: var(--ink);
@@ -79,6 +79,8 @@ button {
   background: none;
   border: none;
   cursor: pointer;
+  /* no double-tap zoom to wait on, and no pan gesture to lose the tap to */
+  touch-action: manipulation;
 }
 button:focus-visible, a:focus-visible {
   outline: 2px solid var(--indigo);
@@ -672,7 +674,7 @@ function decayCard(c, now) {
 // Shown at the foot of the home screen so a phone can tell whether the newest
 // build has actually landed. Bump on every release, together with the CACHE
 // name in sw.js.
-const APP_VERSION = "v9";
+const APP_VERSION = "v10";
 
 const STORE_KEY = "yomikana-v1";
 const LEGACY_KEY = "hiragana-v1";  // the pre-rename store, no longer read
@@ -743,6 +745,48 @@ function groupState(gi) {
   }
   if (dirty) saveStore();
   return arr;
+}
+
+/* ---------- taps ---------- */
+// A finger is not a mouse. It lands, rolls a little, and sometimes rests
+// before it lifts — and Chrome on Android drops the click once the touch drifts
+// past its tap slop or the press grows into a long press, so a smudged or held
+// tap reads as a dead tile. Touch activation runs off the pointer pair
+// instead: press and release on the same element counts, however long it took
+// and however far the finger rolled. Mouse and keyboard stay on the click.
+const TAP_SLOP = 24;  // px outside the element that a release still counts as on it
+let lastTap = 0;
+
+function onTap(el, fn) {
+  let held = null;
+  el.addEventListener("pointerdown", e => {
+    if (e.pointerType === "mouse") return;
+    held = e.pointerId;
+    // the capture keeps the release on this element even once the finger has
+    // slid off its edge, so the slop below is ours to judge, not the browser's
+    try { el.setPointerCapture(e.pointerId); } catch (err) { /* a nicety, not a need */ }
+  });
+  el.addEventListener("pointercancel", () => { held = null; });
+  el.addEventListener("pointerup", e => {
+    if (e.pointerId !== held) return;
+    held = null;
+    if (el.disabled) return;
+    const r = el.getBoundingClientRect();
+    if (e.clientX < r.left - TAP_SLOP || e.clientX > r.right + TAP_SLOP ||
+        e.clientY < r.top - TAP_SLOP || e.clientY > r.bottom + TAP_SLOP) return;
+    // pointerup is a user gesture in its own right, so speech asked for here
+    // still passes Chrome's autoplay gate
+    lastTap = performance.now();
+    fn();
+  });
+  el.addEventListener("click", e => {
+    // whatever click the browser sends behind a tap we already answered is a
+    // duplicate — and it can land on the tile drawn in this one's place, which
+    // is why the guard is a clock and not a flag on the element
+    if (e.pointerType === "touch" || e.pointerType === "pen") return;
+    if (performance.now() - lastTap < 400) return;
+    fn();
+  });
 }
 
 /* ---------- settings ---------- */
@@ -1229,9 +1273,9 @@ function renderQuestion(isNew) {
     '%" aria-label="' + p.done + ' percent learned"></div>' +
     "</div>";
   stage.querySelectorAll(".answer").forEach(btn => {
-    btn.addEventListener("click", () => answer(btn));
+    onTap(btn, () => answer(btn));
   });
-  if (!read) document.getElementById("prompt").addEventListener("click", () => speak(kanaOf(S.current)));
+  if (!read) onTap(document.getElementById("prompt"), () => speak(kanaOf(S.current)));
   S.shownAt = performance.now();
   if (!read) {
     // the sound direction's prompt is the sound, and it has to be spoken inside
