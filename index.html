@@ -124,7 +124,10 @@ button:focus-visible, a:focus-visible {
   color: var(--muted);
   transition: background .15s, color .15s;
 }
-.icon-btn:hover { background: var(--surface); color: var(--ink); }
+/* Hover is a mouse's business. A finger leaves it stuck on the element it last
+   touched, so on a phone the hover border outlives the tap that set it — and
+   the next question inherits it on whatever tile is drawn in that spot. */
+@media (hover: hover) { .icon-btn:hover { background: var(--surface); color: var(--ink); } }
 .icon-btn svg { width: 1.25rem; height: 1.25rem; }
 .icon-btn .alt { display: none; }
 [data-sound="off"] #soundBtn .main { display: none; }
@@ -183,7 +186,7 @@ button:focus-visible, a:focus-visible {
   box-shadow: var(--shadow);
   transition: transform .15s, box-shadow .15s, border-color .15s;
 }
-.refresh-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-lift); border-color: var(--border-strong); }
+@media (hover: hover) { .refresh-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-lift); border-color: var(--border-strong); } }
 .refresh-card:active { transform: translateY(0); }
 .refresh-card > svg { width: 1.15rem; height: 1.15rem; grid-row: span 2; color: var(--indigo); }
 .refresh-card.rusty > svg { color: var(--warn); }
@@ -227,7 +230,7 @@ button:focus-visible, a:focus-visible {
   container-type: size;
   transition: transform .15s, box-shadow .15s, border-color .15s;
 }
-.group-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-lift); border-color: var(--border-strong); }
+@media (hover: hover) { .group-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-lift); border-color: var(--border-strong); } }
 .group-card:active { transform: translateY(0); }
 /* one character of the group, sunk into the tile: it names the script at a
    glance without turning the tile back into a character list, and it fills
@@ -273,7 +276,7 @@ button:focus-visible, a:focus-visible {
   text-decoration: underline;
   text-underline-offset: .2em;
 }
-.link-btn:hover { color: var(--ink); background: var(--surface); }
+@media (hover: hover) { .link-btn:hover { color: var(--ink); background: var(--surface); } }
 .link-btn.danger { color: var(--seal); font-weight: 650; }
 .reset-confirm { display: flex; align-items: center; justify-content: center; gap: .125rem; flex-wrap: wrap; }
 .reset-done { color: var(--good); font-weight: 650; }
@@ -324,7 +327,7 @@ button:focus-visible, a:focus-visible {
   border-radius: 1rem;
   transition: background .15s;
 }
-.prompt:hover { background: var(--bg); }
+@media (hover: hover) { .prompt:hover { background: var(--bg); } }
 .romaji-big {
   font-size: clamp(3.25rem, 17vw, 4.5rem);
   line-height: 1.1;
@@ -399,7 +402,7 @@ button:focus-visible, a:focus-visible {
   .answer.two { font-size: 17cqw; }
   .answer.roman { font-size: 9cqw; }
 }
-.answer:hover:not(:disabled) { border-color: var(--indigo); }
+@media (hover: hover) { .answer:hover:not(:disabled) { border-color: var(--indigo); } }
 .answer:active:not(:disabled) { transform: scale(.98); }
 .answer .key {
   position: absolute;
@@ -440,7 +443,7 @@ button:focus-visible, a:focus-visible {
   font-size: 1rem;
   transition: opacity .15s, transform .1s;
 }
-.primary-btn:hover { opacity: .9; }
+@media (hover: hover) { .primary-btn:hover { opacity: .9; } }
 .primary-btn:active { transform: scale(.98); }
 .ghost-btn {
   min-height: 3.25rem;
@@ -449,7 +452,7 @@ button:focus-visible, a:focus-visible {
   font-weight: 600;
   font-size: 1rem;
 }
-.ghost-btn:hover { border-color: var(--indigo); }
+@media (hover: hover) { .ghost-btn:hover { border-color: var(--indigo); } }
 
 .session-foot { margin-top: .25rem; display: grid; place-items: center; }
 
@@ -468,7 +471,7 @@ button:focus-visible, a:focus-visible {
   border-radius: 1.125rem;
   background: var(--bg);
 }
-.compare-card:hover { border-color: var(--indigo); }
+@media (hover: hover) { .compare-card:hover { border-color: var(--indigo); } }
 .compare-kana { font-size: clamp(3.25rem, 16vw, 4.5rem); line-height: 1.15; font-weight: 500; }
 .compare-romaji { color: var(--muted); font-weight: 650; }
 .compare-sub { color: var(--muted); font-size: .85rem; }
@@ -682,7 +685,7 @@ function decayCard(c, now) {
 // Shown at the foot of the home screen so a phone can tell whether the newest
 // build has actually landed. Bump on every release, together with the CACHE
 // name in sw.js.
-const APP_VERSION = "v11";
+const APP_VERSION = "v12";
 
 const STORE_KEY = "yomikana-v1";
 const LEGACY_KEY = "hiragana-v1";  // the pre-rename store, no longer read
@@ -760,50 +763,72 @@ function groupState(gi) {
 // before it lifts — and Chrome on Android answers that by withholding the
 // click: past its tap slop, or once a press turns into a long press, the
 // gesture belongs to the browser and the tile plays dead. So touch activation
-// does not wait for a click. It follows the pointer from press to release, and
-// it counts a release on the element however long the press lasted and however
-// far the finger rolled — or, if the browser seizes the gesture first, counts
-// the seizure itself. Mouse and keyboard stay on the plain click.
-const TAP_SLOP = 24;  // px outside the element that a release still counts as on it
-let lastTap = 0;
+// does not wait for a click. It follows the gesture from press to release and
+// counts a release on the element however long the press lasted and however
+// far the finger rolled — and if the browser seizes the gesture midway, it
+// counts the seizure, the finger having been on the tile when it happened.
+//
+// The gesture is followed twice over, through pointer events and through touch
+// events, because Chrome truncates the two streams independently: a press it
+// takes for itself ends in pointercancel with no pointerup, while the touch
+// stream runs on to touchend, whose target is fixed at touchstart and so
+// cannot be retargeted away. Whichever stream gets there first counts the tap;
+// `answered` keeps the other from counting the same finger twice.
+const TAP_SLOP = 24;   // px outside the element that a release still counts as on it
+let lastTap = 0;       // when the last tap fired, to quiet the click behind it
+let answered = false;  // whether the gesture in progress has already counted
+
+// one finger followed through one event stream. The two streams number their
+// fingers differently, so each gets its own follower and its own ids.
+function follow(el, fn) {
+  let id = null, x = 0, y = 0;
+  return {
+    start(i, cx, cy) { id = i; x = cx; y = cy; answered = false; },
+    move(i, cx, cy) { if (i === id) { x = cx; y = cy; } },
+    // a seizure reports no position of its own; the last one known stands
+    end(i, cx, cy) {
+      if (i !== id) return;
+      id = null;
+      if (cx !== undefined) { x = cx; y = cy; }
+      if (answered || el.disabled) return;
+      const r = el.getBoundingClientRect();
+      if (x < r.left - TAP_SLOP || x > r.right + TAP_SLOP ||
+          y < r.top - TAP_SLOP || y > r.bottom + TAP_SLOP) return;
+      // a pointer or touch event is a user gesture in its own right, so speech
+      // asked for here still passes Chrome's autoplay gate
+      answered = true;
+      lastTap = performance.now();
+      fn();
+    }
+  };
+}
 
 function onTap(el, fn) {
-  let held = null, x = 0, y = 0;
-  function fire() {
-    held = null;
-    if (el.disabled) return;
-    const r = el.getBoundingClientRect();
-    if (x < r.left - TAP_SLOP || x > r.right + TAP_SLOP ||
-        y < r.top - TAP_SLOP || y > r.bottom + TAP_SLOP) return;
-    // a pointer event is a user gesture in its own right, so speech asked for
-    // here still passes Chrome's autoplay gate
-    lastTap = performance.now();
-    fn();
-  }
+  const p = follow(el, fn), t = follow(el, fn);
   el.addEventListener("pointerdown", e => {
     if (e.pointerType === "mouse") return;
-    held = e.pointerId;
-    x = e.clientX;
-    y = e.clientY;
+    p.start(e.pointerId, e.clientX, e.clientY);
     // the capture keeps the rest of the gesture on this element even once the
     // finger has slid off its edge, so the slop above is ours to judge
     try { el.setPointerCapture(e.pointerId); } catch (err) { /* a nicety, not a need */ }
   });
-  el.addEventListener("pointermove", e => {
-    if (e.pointerId === held) { x = e.clientX; y = e.clientY; }
+  el.addEventListener("pointermove", e => p.move(e.pointerId, e.clientX, e.clientY));
+  el.addEventListener("pointerup", e => p.end(e.pointerId, e.clientX, e.clientY));
+  el.addEventListener("pointercancel", e => p.end(e.pointerId));
+  el.addEventListener("touchstart", e => {
+    const c = e.changedTouches[0];
+    t.start(c.identifier, c.clientX, c.clientY);
+  }, { passive: true });
+  el.addEventListener("touchmove", e => {
+    for (const c of e.changedTouches) t.move(c.identifier, c.clientX, c.clientY);
+  }, { passive: true });
+  el.addEventListener("touchend", e => {
+    for (const c of e.changedTouches) t.end(c.identifier, c.clientX, c.clientY);
   });
-  el.addEventListener("pointerup", e => {
-    if (e.pointerId !== held) return;
-    x = e.clientX;
-    y = e.clientY;
-    fire();
+  el.addEventListener("touchcancel", e => {
+    for (const c of e.changedTouches) t.end(c.identifier);
   });
-  // Chrome takes gestures away by canceling the pointer — a long press, a drag
-  // it means to turn into a scroll — and then no click ever comes, which is
-  // what makes a held or smudged tap feel dead. The finger was on this tile
-  // when the browser stepped in, so that is still the tap that was meant.
-  el.addEventListener("pointercancel", e => { if (e.pointerId === held) fire(); });
-  // and if a long press does get as far as a menu, it is not wanted here
+  // a long press has nothing to offer on a tile
   el.addEventListener("contextmenu", e => e.preventDefault());
   el.addEventListener("click", e => {
     // whatever click the browser sends behind a tap we already answered is a
