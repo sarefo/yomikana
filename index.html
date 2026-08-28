@@ -340,6 +340,14 @@ button:focus-visible, a:focus-visible {
 }
 [data-sound="off"] .prompt-hint { visibility: hidden; }
 
+/* Chrome reads a drag that starts on a tile as a pan — the URL bar slides, the
+   pointer is canceled, and the tap is gone. Nothing here scrolls, so the tile
+   keeps the gesture. The declaration is written twice so browsers without
+   pinch-zoom fall back to manipulation rather than to auto. */
+.answer, .prompt {
+  touch-action: manipulation;
+  touch-action: pinch-zoom;
+}
 .answers {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -674,7 +682,7 @@ function decayCard(c, now) {
 // Shown at the foot of the home screen so a phone can tell whether the newest
 // build has actually landed. Bump on every release, together with the CACHE
 // name in sw.js.
-const APP_VERSION = "v10";
+const APP_VERSION = "v11";
 
 const STORE_KEY = "yomikana-v1";
 const LEGACY_KEY = "hiragana-v1";  // the pre-rename store, no longer read
@@ -749,36 +757,54 @@ function groupState(gi) {
 
 /* ---------- taps ---------- */
 // A finger is not a mouse. It lands, rolls a little, and sometimes rests
-// before it lifts — and Chrome on Android drops the click once the touch drifts
-// past its tap slop or the press grows into a long press, so a smudged or held
-// tap reads as a dead tile. Touch activation runs off the pointer pair
-// instead: press and release on the same element counts, however long it took
-// and however far the finger rolled. Mouse and keyboard stay on the click.
+// before it lifts — and Chrome on Android answers that by withholding the
+// click: past its tap slop, or once a press turns into a long press, the
+// gesture belongs to the browser and the tile plays dead. So touch activation
+// does not wait for a click. It follows the pointer from press to release, and
+// it counts a release on the element however long the press lasted and however
+// far the finger rolled — or, if the browser seizes the gesture first, counts
+// the seizure itself. Mouse and keyboard stay on the plain click.
 const TAP_SLOP = 24;  // px outside the element that a release still counts as on it
 let lastTap = 0;
 
 function onTap(el, fn) {
-  let held = null;
-  el.addEventListener("pointerdown", e => {
-    if (e.pointerType === "mouse") return;
-    held = e.pointerId;
-    // the capture keeps the release on this element even once the finger has
-    // slid off its edge, so the slop below is ours to judge, not the browser's
-    try { el.setPointerCapture(e.pointerId); } catch (err) { /* a nicety, not a need */ }
-  });
-  el.addEventListener("pointercancel", () => { held = null; });
-  el.addEventListener("pointerup", e => {
-    if (e.pointerId !== held) return;
+  let held = null, x = 0, y = 0;
+  function fire() {
     held = null;
     if (el.disabled) return;
     const r = el.getBoundingClientRect();
-    if (e.clientX < r.left - TAP_SLOP || e.clientX > r.right + TAP_SLOP ||
-        e.clientY < r.top - TAP_SLOP || e.clientY > r.bottom + TAP_SLOP) return;
-    // pointerup is a user gesture in its own right, so speech asked for here
-    // still passes Chrome's autoplay gate
+    if (x < r.left - TAP_SLOP || x > r.right + TAP_SLOP ||
+        y < r.top - TAP_SLOP || y > r.bottom + TAP_SLOP) return;
+    // a pointer event is a user gesture in its own right, so speech asked for
+    // here still passes Chrome's autoplay gate
     lastTap = performance.now();
     fn();
+  }
+  el.addEventListener("pointerdown", e => {
+    if (e.pointerType === "mouse") return;
+    held = e.pointerId;
+    x = e.clientX;
+    y = e.clientY;
+    // the capture keeps the rest of the gesture on this element even once the
+    // finger has slid off its edge, so the slop above is ours to judge
+    try { el.setPointerCapture(e.pointerId); } catch (err) { /* a nicety, not a need */ }
   });
+  el.addEventListener("pointermove", e => {
+    if (e.pointerId === held) { x = e.clientX; y = e.clientY; }
+  });
+  el.addEventListener("pointerup", e => {
+    if (e.pointerId !== held) return;
+    x = e.clientX;
+    y = e.clientY;
+    fire();
+  });
+  // Chrome takes gestures away by canceling the pointer — a long press, a drag
+  // it means to turn into a scroll — and then no click ever comes, which is
+  // what makes a held or smudged tap feel dead. The finger was on this tile
+  // when the browser stepped in, so that is still the tap that was meant.
+  el.addEventListener("pointercancel", e => { if (e.pointerId === held) fire(); });
+  // and if a long press does get as far as a menu, it is not wanted here
+  el.addEventListener("contextmenu", e => e.preventDefault());
   el.addEventListener("click", e => {
     // whatever click the browser sends behind a tap we already answered is a
     // duplicate — and it can land on the tile drawn in this one's place, which
