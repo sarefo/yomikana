@@ -710,7 +710,7 @@ function decayCard(c, now) {
 // Shown at the foot of the home screen so a phone can tell whether the newest
 // build has actually landed. Bump on every release, together with the CACHE
 // name in sw.js.
-const APP_VERSION = "v13";
+const APP_VERSION = "v14";
 
 const STORE_KEY = "yomikana-v1";
 const LEGACY_KEY = "hiragana-v1";  // the pre-rename store, no longer read
@@ -781,6 +781,42 @@ function groupState(gi) {
   }
   if (dirty) saveStore();
   return arr;
+}
+
+// A character is one character, however many decks it appears in. The voiced
+// groups are built on their unvoiced partners — が is taught beside か — and
+// Look-alikes borrows all eighteen of its cards outright, so a third of the
+// course is characters some earlier group already taught. Left with separate
+// levels, opening Voiced G · D after the first two groups means grinding
+// たちつてとかきくけこ back up from nothing before が is ever introduced.
+//
+// So a level is shared by kana within a script and direction: the strongest
+// copy wins, the rest adopt it, and misses — the record of what is shaky —
+// carry across at their worst. Decay has already run by then, so the copy that
+// wins is one that has honestly survived its time away.
+function shareLevels() {
+  const states = GROUPS.map((g, gi) => groupState(gi));
+  const best = new Map();
+  GROUPS.forEach((g, gi) => g.cards.forEach((card, ci) => {
+    const c = states[gi][ci];
+    const b = best.get(card.k);
+    if (!b) { best.set(card.k, { src: c, miss: c[4] || 0, seen: c[2] }); return; }
+    b.miss = Math.max(b.miss, c[4] || 0);
+    b.seen = b.seen || c[2];
+    // most recently practiced breaks a tie: of two copies at the same level it
+    // is the one with the most life left before decay touches it
+    if (c[0] > b.src[0] || (c[0] === b.src[0] && c[3] > b.src[3])) b.src = c;
+  }));
+  let dirty = false;
+  GROUPS.forEach((g, gi) => g.cards.forEach((card, ci) => {
+    const c = states[gi][ci];
+    const b = best.get(card.k);
+    if (c[0] === b.src[0] && c[1] === b.src[1] && c[2] === b.seen &&
+        c[3] === b.src[3] && (c[4] || 0) === b.miss) return;
+    c[0] = b.src[0]; c[1] = b.src[1]; c[2] = b.seen; c[3] = b.src[3]; c[4] = b.miss;
+    dirty = true;
+  }));
+  if (dirty) saveStore();
 }
 
 /* ---------- taps ---------- */
@@ -966,6 +1002,7 @@ function renderRefresh() {
 refreshEl.addEventListener("click", () => startSession(REVIEW));
 
 function renderHome() {
+  shareLevels();
   renderRefresh();
   groupListEl.innerHTML = "";
   GROUPS.forEach((g, gi) => {
@@ -1075,6 +1112,7 @@ function deckForGroup(gi) {
 }
 
 function startSession(gi) {
+  shareLevels();
   const review = gi === REVIEW;
   const deck = review ? reviewDeck() : deckForGroup(gi);
   if (!deck.length) return;
@@ -1575,9 +1613,13 @@ function renderCompare() {
 function renderMastered() {
   S.phase = "mastered";
   document.getElementById("sessionFoot").classList.add("hidden");
+  // same rule as the checkpoint: praise the learner in characters they can
+  // read. よくできました asks for ま and で, which a group of vowels and K
+  // has not taught anybody yet.
+  const cheered = cheer();
   stage.innerHTML =
     '<div class="mastered">' +
-      '<div class="kana-big kana-font">よくできました</div>' +
+      (cheered ? '<div class="kana-big kana-font">' + cheered + "</div>" : "") +
       "<h2>Group mastered</h2>" +
       "<p>All " + S.cards.length + " characters are at the top level.<br>Reviews keep them fresh.</p>" +
       '<div class="mastered-actions">' +
