@@ -632,6 +632,31 @@ const INTRO_PAUSE = 500;
 // pauses at a checkpoint and asks whether to keep going.
 const ROUND_LEN = 20;
 
+// The kana line over a checkpoint is the only unglossed Japanese on the
+// screen, so it is worth showing only when it can actually be read: a phrase
+// appears once every character in it has been learned, and the line is left
+// off until one qualifies. Written without っ, ー or anything else the app
+// never teaches, so the check has only cards to weigh. Hiragana here; the
+// katakana deck reads them converted, which is how these exclamations are
+// often written anyway.
+const CHEERS = [
+  "せいかい",    // that's right
+  "いいね",      // nice
+  "よし",        // alright
+  "うまい",      // well done
+  "できた",      // got it
+  "すごい",      // great
+  "さすが",      // impressive
+  "ごうかく",    // a pass
+  "まんてん",    // full marks
+  "かんぺき",    // perfect
+  "じょうず",    // skillful
+  "おみごと",    // splendid
+  "そのちょうし", // that's the way
+  "ばんざい",    // hooray
+  "ひとやすみ",  // a breather
+];
+
 // Levels also fade with wall-clock time, not only with questions asked. The
 // waits above are counted in questions, so they stop the moment the tab is
 // closed: without this a deck left alone for two months still reads as
@@ -685,7 +710,7 @@ function decayCard(c, now) {
 // Shown at the foot of the home screen so a phone can tell whether the newest
 // build has actually landed. Bump on every release, together with the CACHE
 // name in sw.js.
-const APP_VERSION = "v12";
+const APP_VERSION = "v13";
 
 const STORE_KEY = "yomikana-v1";
 const LEGACY_KEY = "hiragana-v1";  // the pre-rename store, no longer read
@@ -1458,6 +1483,38 @@ function nextRound() {
   showQuestion();
 }
 
+// Every character the learner can read: at LEARNED_AT or better anywhere in
+// the current script, in either direction. Recognizing a shape is one skill
+// however it was drilled, so a deck learned sound → kana still counts here.
+function learnedKana() {
+  const known = new Set();
+  GROUPS.forEach((g, gi) => {
+    for (const d of ["sound", "read"]) {
+      const st = d === dir ? groupState(gi) : store.groups[script + ":" + d + ":" + g.name];
+      if (!st || st.length !== g.cards.length) continue;
+      g.cards.forEach((card, ci) => { if (st[ci][0] >= LEARNED_AT) known.add(card.k); });
+    }
+  });
+  return known;
+}
+
+// One of the cheers, or "" while none of them is readable yet. Combos are
+// single cards written with two characters, so the walk tries the pair first.
+function cheer() {
+  const known = learnedKana();
+  const pool = CHEERS
+    .map(p => script === "kata" ? toKatakana(p) : p)
+    .filter(p => {
+      for (let i = 0; i < p.length;) {
+        if (known.has(p.slice(i, i + 2))) i += 2;
+        else if (known.has(p[i])) i += 1;
+        else return false;
+      }
+      return true;
+    });
+  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : "";
+}
+
 // Where a round pauses. Cleared of due work it is a natural place to stop;
 // mid-learning it is just a breather with the score so far.
 function renderCheckpoint() {
@@ -1467,9 +1524,10 @@ function renderCheckpoint() {
   const settling = S.cards.filter(c => c[2] && c[0] < MAX_LEVEL - 1).length;
   const waiting = S.cards.filter(c => !c[2]).length;
   const m = S.roundFails;
+  const cheered = cheer();
   stage.innerHTML =
     '<div class="mastered">' +
-      '<div class="kana-big kana-font">' + (caughtUp ? "ばっちり" : "ひとやすみ") + "</div>" +
+      (cheered ? '<div class="kana-big kana-font">' + cheered + "</div>" : "") +
       "<h2>" + (caughtUp ? "All caught up" : "Good round") + "</h2>" +
       "<p>" + ROUND_LEN + " questions, " +
         (m === 0 ? "no misses" : m === 1 ? "one miss" : m + " misses") + ".<br>" +
