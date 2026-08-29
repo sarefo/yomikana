@@ -66,7 +66,7 @@ export const MISS_WEIGHT = 0.25;
 // Shown at the foot of the home screen so a phone can tell whether the newest
 // build has actually landed. Bump on every release, together with the CACHE
 // name in sw.js.
-export const APP_VERSION = "v19";
+export const APP_VERSION = "v20";
 // Reading practice. An item is a whole word rather than a single character, so
 // a round is shorter than the drill's. The ramp is what keeps a session from
 // opening on a phrase: the first items are short, and the cap lifts every few

@@ -34,13 +34,16 @@
     </div>
   </div>
   <div class="switch-row">
-    <div class="script-switch" role="tablist" aria-label="Script">
+    <div class="script-switch" role="tablist" aria-label="What to drill">
       <button role="tab" data-script="hira" aria-selected="true">Hiragana</button>
       <button role="tab" data-script="kata" aria-selected="false">Katakana</button>
+      <button role="tab" data-script="mix" aria-selected="false" aria-label="Hiragana against katakana">Both</button>
     </div>
+    <!-- filled in from the mode on the left: which pair of directions these two
+         stand for depends on it, so they are labeled in home.js rather than here -->
     <div class="script-switch dir-switch" role="tablist" aria-label="Question direction">
-      <button role="tab" data-dir="sound" id="dirSound" aria-label="Hear a sound, pick the character"></button>
-      <button role="tab" data-dir="read" id="dirRead" aria-label="See a character, pick the reading"></button>
+      <button role="tab"></button>
+      <button role="tab"></button>
     </div>
   </div>
   <button id="refreshCard" class="home-card refresh-card hidden">
@@ -59,7 +62,7 @@
     <div class="reset-zone">
       <button id="resetBtn" class="link-btn">Reset progress</button>
       <div id="resetConfirm" class="reset-confirm hidden">
-        <span>Erase both scripts?</span>
+        <span>Erase all progress?</span>
         <button id="resetYes" class="link-btn danger">Erase</button>
         <button id="resetNo" class="link-btn">Cancel</button>
       </div>

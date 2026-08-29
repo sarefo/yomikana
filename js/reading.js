@@ -37,6 +37,10 @@ let R = null; // active reading session
 // decide whether to offer the mode at all, so it is recomputed rather than
 // cached: a session of the drill can add a character and with it a dozen words.
 export function readingPool() {
+  // The mixed mode has no words to offer. Its lists would have to be one script
+  // transliterated into the other, and スシ is not something anyone reads —
+  // the katakana words are loanwords because that is what katakana is for.
+  if (script === "mix") return [];
   return readableWords(script, learnedKana());
 }
 

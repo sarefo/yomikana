@@ -10,7 +10,7 @@ import {
   READ_HOLD, INTRO_PAUSE, ROUND_LEN,
 } from "./config.js";
 import {
-  store, saveStore, today, leech, dir,
+  store, saveStore, today, leech, dir, mixing, askFace, ansFace,
   groupKey, reviewKey, missKey, pairKey, pairCount, shareLevels,
 } from "./store.js";
 import { reviewDeck, deckForGroup, cheer } from "./deck.js";
@@ -192,7 +192,11 @@ function showQuestion() {
 }
 
 /* ---------- rendering ---------- */
-function kanaOf(i) { return S.deck[i].k; }
+// The two faces of a card: what the question shows and what the right tile
+// says. Only the mixed mode tells them apart — everywhere else a card is one
+// character and these are both it.
+function askOf(i) { return askFace(S.deck[i]); }
+function ansOf(i) { return ansFace(S.deck[i]); }
 function romajiOf(i) { return S.deck[i].r; }
 
 // A character in several groups is answered once and recorded in all of them:
@@ -240,17 +244,22 @@ function renderQuestion(isNew) {
   // from a hundred kana the choices would be trivially far apart, which would
   // make a refresh easier than the drill it is refreshing.
   const pool = S.deck;
+  const mixed = mixing();
   const near = [], far = [], rivals = [];
   for (let i = 0; i < pool.length; i++) {
-    if (i === correct || pool[i].r === pool[correct].r) continue;
-    if (pairCount(pool[i].k, pool[correct].k)) { rivals.push(i); continue; }
+    if (i === correct) continue;
+    // In the two romaji directions a tile reading the same as the right one is
+    // a second correct answer — a mixed refresh holds both じ and ぢ, and away
+    // from their own groups both are "ji". Asked in kana the prompt says which
+    // of the two is wanted, so there the pair is free to meet.
+    if (!mixed && pool[i].r === pool[correct].r) continue;
+    if (pairCount(ansOf(i), ansOf(correct))) { rivals.push(i); continue; }
     (pool[i].keys.some(k => pool[correct].keys.includes(k)) ? near : far).push(i);
   }
   // recorded rivals take seats first: telling the pair apart is exactly the
   // discrimination worth practicing, so they keep meeting on the buttons —
   // with the red/green verdict right there — until the confusion is worked off
-  rivals.sort((a, b) =>
-    pairCount(pool[b].k, pool[correct].k) - pairCount(pool[a].k, pool[correct].k));
+  rivals.sort((a, b) => pairCount(ansOf(b), ansOf(correct)) - pairCount(ansOf(a), ansOf(correct)));
   const picks = [correct, ...rivals.splice(0, 2)];
   near.push(...rivals);
   for (const bag of [near, far]) {
@@ -263,14 +272,18 @@ function renderQuestion(isNew) {
   S.picks = picks;
   const p = pieSlices();
 
-  // In the reading direction the prompt is the character itself and the sound
-  // is withheld — spoken up front it would answer the question. It arrives on
-  // the correct tap instead.
-  const read = dir === "read";
+  // Three shapes of question and one screen for all of them: hear a sound and
+  // pick the character, see the character and pick its reading, or see the
+  // character in one script and pick it in the other. What varies is only
+  // which side is written in kana — and the sound, which is given up front
+  // where it is the question and withheld everywhere else, because anywhere
+  // else it is the answer.
+  const askKana = dir !== "sound";
+  const tileKana = dir !== "read";
   stage.innerHTML =
-    '<div class="prompt-zone">' + (read
-      ? '<div class="kana-big kana-font' + (kanaOf(correct).length > 1 ? " two" : "") + '">' +
-          kanaOf(correct) + "</div>"
+    '<div class="prompt-zone">' + (askKana
+      ? '<div class="kana-big kana-font' + (askOf(correct).length > 1 ? " two" : "") + '">' +
+          askOf(correct) + "</div>"
       : '<button class="prompt" id="prompt" aria-label="Play the sound again">' +
           '<span class="romaji-big">' + romajiOf(correct) + "</span>" +
           ("speechSynthesis" in window ? '<span class="prompt-hint">tap to repeat</span>' : "") +
@@ -278,12 +291,12 @@ function renderQuestion(isNew) {
     "</div>" +
     '<div class="answers">' +
     picks.map((i, n) =>
-      read
-      ? '<button class="answer roman' + (isNew && i === correct ? " new" : "") +
-        '" data-i="' + i + '"><span class="key mono">' + (n + 1) + "</span>" + romajiOf(i) + "</button>"
-      : '<button class="answer kana-font' + (kanaOf(i).length > 1 ? " two" : "") +
+      tileKana
+      ? '<button class="answer kana-font' + (ansOf(i).length > 1 ? " two" : "") +
         (isNew && i === correct ? " new" : "") +
-        '" data-i="' + i + '"><span class="key mono">' + (n + 1) + "</span>" + kanaOf(i) + "</button>"
+        '" data-i="' + i + '"><span class="key mono">' + (n + 1) + "</span>" + ansOf(i) + "</button>"
+      : '<button class="answer roman' + (isNew && i === correct ? " new" : "") +
+        '" data-i="' + i + '"><span class="key mono">' + (n + 1) + "</span>" + romajiOf(i) + "</button>"
     ).join("") +
     '<div class="pie" id="pie" role="img" style="--done:' + p.done + "%;--clean:" + p.clean +
     '%" aria-label="' + p.done + ' percent learned"></div>' +
@@ -291,18 +304,17 @@ function renderQuestion(isNew) {
   stage.querySelectorAll(".answer").forEach(btn => {
     onTap(btn, () => answer(btn));
   });
-  if (!read) onTap(document.getElementById("prompt"), () => speak(kanaOf(S.current)));
+  if (!askKana) onTap(document.getElementById("prompt"), () => speak(ansOf(S.current)));
   S.shownAt = performance.now();
-  if (!read) {
+  if (!askKana) {
     // the sound direction's prompt is the sound, and it has to be spoken inside
     // the click that asked for it or Chrome on Android drops it
-    speak(kanaOf(correct));
+    speak(ansOf(correct));
   } else if (isNew) {
-    // a brand-new character in the reading direction is shown with its answer
-    // already marked, so speaking it gives nothing away — but it waits out a
-    // beat of silence first, and only if the question is still the one that
-    // asked for it
-    const say = kanaOf(correct);
+    // a brand-new character asked in kana is shown with its answer already
+    // marked, so speaking it gives nothing away — but it waits out a beat of
+    // silence first, and only if the question is still the one that asked for it
+    const say = ansOf(correct);
     setTimeout(() => {
       if (S && S.phase === "question" && S.current === correct) speak(say);
     }, INTRO_PAUSE);
@@ -328,13 +340,17 @@ function answer(btn) {
     card[1] = 0;
     card[3] = now;
     card[4] = (card[4] || 0) + 1;  // and from now on it comes back sooner
-    const mk = missKey(entry.k, S.deck[chosen].k);
+    // recorded between the faces that were actually on the buttons, not the
+    // card's canonical one: what was mistaken for what is a fact about two
+    // shapes, so a シ taken for ツ in the mixed mode is the same confusion the
+    // katakana drill records, and the two modes should hand it back and forth
+    const mk = missKey(ansOf(S.current), ansOf(chosen));
     store.pairs[mk] = Math.min((store.pairs[mk] || 0) + 1, 9);
     // a repeat of a known confusion has earned a side-by-side look once the
     // question resolves; a first slip is just a miss. Either order counts
     // toward it — the screen answers a muddled pair, not a muddled direction
-    const pk = pairKey(entry.k, S.deck[chosen].k);
-    if (pairCount(entry.k, S.deck[chosen].k) >= 2 && !S.compared.has(pk)) {
+    const pk = pairKey(ansOf(S.current), ansOf(chosen));
+    if (pairCount(ansOf(S.current), ansOf(chosen)) >= 2 && !S.compared.has(pk)) {
       S.compared.add(pk);
       S.comparePair = [S.current, chosen];
     }
@@ -358,11 +374,12 @@ function answer(btn) {
     return;
   }
 
-  // In the reading direction the sound arrives as the reward for the right
-  // answer — given with the question it would have handed the answer over, and
-  // given on a wrong tap it would either do the same or name a character that
-  // is not on the screen. A miss earns it too, once the right one is found.
-  const spoke = dir === "read" && speak(kanaOf(S.current));
+  // Wherever the question is written in kana the sound arrives as the reward
+  // for the right answer — given with the question it would have handed the
+  // answer over, and given on a wrong tap it would either do the same or name
+  // a character that is not on the screen. A miss earns it too, once the right
+  // one is found.
+  const spoke = dir !== "sound" && speak(ansOf(S.current));
 
   if (!S.failed) {
     // answering with a known rival on the buttons and not falling for it is a
@@ -372,7 +389,7 @@ function answer(btn) {
     // nothing yet about た being taken for だ, which is its own debt.
     for (const i of S.picks) {
       if (i === S.current) continue;
-      const mk = missKey(entry.k, S.deck[i].k);
+      const mk = missKey(ansOf(S.current), ansOf(i));
       if (store.pairs[mk] && --store.pairs[mk] === 0) delete store.pairs[mk];
     }
     S.forced = -1;
@@ -469,8 +486,13 @@ function renderCompare() {
       '<div class="compare-row">' +
       pair.map(i =>
         '<button class="compare-card" data-i="' + i + '" aria-label="Play ' + romajiOf(i) + '">' +
-          '<span class="compare-kana kana-font">' + kanaOf(i) + "</span>" +
-          '<span class="compare-romaji">' + romajiOf(i) + "</span>" +
+          '<span class="compare-kana kana-font">' + ansOf(i) + "</span>" +
+          // in the mixed mode the other face belongs here too: the pair was
+          // muddled on the way over from it, and seeing where each of them
+          // came from is half of what sets them apart
+          '<span class="compare-romaji">' +
+            (mixing() ? '<span class="kana-font">' + askOf(i) + "</span> · " : "") +
+            romajiOf(i) + "</span>" +
         "</button>"
       ).join("") +
       "</div>" +
@@ -479,7 +501,7 @@ function renderCompare() {
       '<button class="primary-btn" id="compareGo">Continue</button>' +
     "</div>";
   stage.querySelectorAll(".compare-card").forEach(btn => {
-    btn.addEventListener("click", () => speak(kanaOf(Number(btn.dataset.i))));
+    btn.addEventListener("click", () => speak(ansOf(Number(btn.dataset.i))));
   });
   document.getElementById("compareGo").addEventListener("click", showQuestion);
 }

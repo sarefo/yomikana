@@ -2,11 +2,11 @@
 // tiles under it, and the two switches that decide which script and which
 // direction all of it is about.
 
-import { DISPLAY, MARK_AT, SCRIPTS } from "./kana.js";
+import { DISPLAY, DIRS, MARK_AT, SCRIPTS } from "./kana.js";
 import { MAX_LEVEL, LEARNED_AT, READING_UNLOCK } from "./config.js";
 import {
   store, saveStore, script, dir, GROUPS, setScript, setDir,
-  groupState, shareLevels,
+  groupState, shareLevels, askFace,
 } from "./store.js";
 import { reviewDeck } from "./deck.js";
 import { startSession, REVIEW } from "./quiz.js";
@@ -62,7 +62,9 @@ export function renderHome() {
     const learned = st.filter(c => c[0] >= LEARNED_AT).length;
     // green is still reserved for the whole group sitting at the top level
     const full = st.every(c => c[0] >= MAX_LEVEL - 1);
-    const mark = g.cards[MARK_AT[gi]].k;
+    // the face the group will be asked in, so a tile shows what it is offering
+    // rather than one script's version of it in a mode that drills both
+    const mark = askFace(g.cards[MARK_AT[gi]]);
     const li = document.createElement("li");
     const btn = document.createElement("button");
     btn.className = "group-card" + (full ? " full" : "");
@@ -82,31 +84,56 @@ export function renderHome() {
   });
 }
 
-/* ---------- script switch ---------- */
+/* ---------- mode and direction ---------- */
+// The left switch picks what is being drilled against what; the right one
+// picks which way round. Neither pair of directions belongs to more than one
+// mode — "a → あ" means nothing in the mixed mode and "あ → ア" means nothing
+// outside it — so the right switch is written from the left one rather than
+// fixed in the markup, and the two are never out of step.
 const scriptBtns = [...document.querySelectorAll(".script-switch:not(.dir-switch) button")];
+const dirBtns = [...document.querySelectorAll(".dir-switch button")];
+const native = c => '<span class="native kana-font">' + c + "</span>";
+const DIR_LABEL = {
+  sound: s => "a → " + native(s.seal),
+  read: s => native(s.seal) + " → a",
+  h2k: () => native("あ") + " → " + native("ア"),
+  k2h: () => native("ア") + " → " + native("あ"),
+};
+const DIR_ARIA = {
+  sound: "Hear a sound, pick the character",
+  read: "See a character, pick the reading",
+  h2k: "See a hiragana character, pick the katakana",
+  k2h: "See a katakana character, pick the hiragana",
+};
+
 function applyScript() {
-  const seal = SCRIPTS[script].seal;
-  document.getElementById("brandSeal").textContent = seal;
+  const s = SCRIPTS[script];
+  const sealEl = document.getElementById("brandSeal");
+  sealEl.textContent = s.seal;
+  // the mixed mode's seal is a pair, and two characters do not fit at the size
+  // one is set in
+  sealEl.classList.toggle("two", s.seal.length > 1);
   scriptBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.script === script)));
-  // the direction labels borrow the script's seal, so they flip with it
-  document.getElementById("dirSound").innerHTML =
-    'a → <span class="native kana-font">' + seal + "</span>";
-  document.getElementById("dirRead").innerHTML =
-    '<span class="native kana-font">' + seal + "</span> → a";
+  dirBtns.forEach((b, n) => {
+    const d = DIRS[script][n];
+    b.dataset.dir = d;
+    b.innerHTML = DIR_LABEL[d](s);
+    b.setAttribute("aria-label", DIR_ARIA[d]);
+  });
+}
+function applyDir() {
+  dirBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.dir === dir)));
 }
 scriptBtns.forEach(b => b.addEventListener("click", () => {
   if (!b.dataset.script || b.dataset.script === script) return;
   setScript(b.dataset.script);
   applyScript();
+  // a mode brings its own remembered direction with it, so the right switch
+  // has to be re-marked as well as re-labeled
+  applyDir();
   renderHome();
   showReset("button");
 }));
-applyScript();
-
-const dirBtns = [...document.querySelectorAll(".dir-switch button")];
-function applyDir() {
-  dirBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.dir === dir)));
-}
 dirBtns.forEach(b => b.addEventListener("click", () => {
   if (!b.dataset.dir || b.dataset.dir === dir) return;
   setDir(b.dataset.dir);
@@ -114,6 +141,7 @@ dirBtns.forEach(b => b.addEventListener("click", () => {
   renderHome();
   showReset("button");
 }));
+applyScript();
 applyDir();
 
 /* ---------- reset ---------- */

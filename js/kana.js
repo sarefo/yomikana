@@ -39,9 +39,43 @@ const KATAKANA = HIRAGANA.map(g => ({
   cards: g.name === "similar" ? KATAKANA_SIMILAR
        : g.cards.map(c => ({ k: toKatakana(c.k), r: c.r })),
 }));
+
+// The third mode asks the two scripts against each other, so a card here is a
+// sound rather than a character: the same card is あ on one side of the arrow
+// and ア on the other. Its groups are hiragana's, converted a character at a
+// time as they are shown — with one exception, the look-alikes again, because
+// what is confusable *between* the scripts is a third list and neither of the
+// two already written above.
+//
+// These are the sounds whose faces are easy to take for something else: し for
+// レ, と for ヒ, う for ラ, ま for ホ — and the katakana knots, シツソン and
+// クタワウフ and ヌスナメ, which here have to be told apart from a prompt that
+// is not written in katakana at all.
+const CROSS_SIMILAR = [
+  { k: "し", r: "shi" }, { k: "つ", r: "tsu" }, { k: "そ", r: "so" }, { k: "ん", r: "n" },
+  { k: "れ", r: "re" }, { k: "と", r: "to" }, { k: "ひ", r: "hi" }, { k: "う", r: "u" },
+  { k: "ら", r: "ra" }, { k: "た", r: "ta" }, { k: "な", r: "na" }, { k: "わ", r: "wa" },
+  { k: "く", r: "ku" }, { k: "ふ", r: "fu" }, { k: "ぬ", r: "nu" }, { k: "す", r: "su" },
+  { k: "め", r: "me" }, { k: "ろ", r: "ro" }, { k: "ま", r: "ma" }, { k: "ほ", r: "ho" },
+  { k: "さ", r: "sa" }, { k: "せ", r: "se" },
+];
+const MIXED = HIRAGANA.map(g =>
+  g.name === "similar" ? { name: g.name, cards: CROSS_SIMILAR } : g);
+
 export const SCRIPTS = {
   hira: { groups: HIRAGANA, seal: "あ" },
   kata: { groups: KATAKANA, seal: "ア" },
+  mix: { groups: MIXED, seal: "あア" },
+};
+
+// What each mode asks between, and the two ways round it can be asked. The
+// first of a pair is the one the mode opens on. Recognizing a character and
+// recalling it are separate skills, and mapping one script onto the other is a
+// third — so each of these six keeps its own levels under its own store keys.
+export const DIRS = {
+  hira: ["sound", "read"],
+  kata: ["sound", "read"],
+  mix: ["h2k", "k2h"],
 };
 
 // The kana line over a checkpoint is the only unglossed Japanese on the

@@ -4,7 +4,7 @@
 // the app reads as if they were globals, because to it they are: which script
 // and which direction is being drilled.
 
-import { SCRIPTS } from "./kana.js";
+import { SCRIPTS, DIRS, toKatakana } from "./kana.js";
 import { DECAY_DAYS, DECAY_FLOOR, MISS_CAP, MISS_WEIGHT } from "./config.js";
 
 export function today() { return Math.floor(Date.now() / 864e5); }
@@ -65,12 +65,22 @@ for (const bag of [store.groups, store.fails]) {
     if (m) { bag[m[1] + ":sound:" + m[2]] = bag[k]; delete bag[k]; }
   }
 }
-export let script = store.settings.script === "kata" ? "kata" : "hira";
+export let script = SCRIPTS[store.settings.script] ? store.settings.script : "hira";
 // Which way the questions run: "sound" hears a reading and picks the kana,
-// "read" sees the kana and picks the reading. Recognizing a character and
-// recalling its reading are separate skills, so each direction keeps its own
-// levels, misses and fails under its own store keys.
-export let dir = store.settings.dir === "read" ? "read" : "sound";
+// "read" sees the kana and picks the reading, and in the mixed mode "h2k" and
+// "k2h" show the character in one script and ask for it in the other.
+//
+// Each mode remembers its own way round, and the two romaji modes share theirs:
+// which side of the arrow you like being asked from is a habit rather than a
+// fact about hiragana, but "a → あ" and "あ → ア" are not the same choice at
+// all, so switching to the mixed mode must not carry an answer with it.
+function dirSetting(s) { return s === "mix" ? "mixDir" : "dir"; }
+function savedDir(s) {
+  const opts = DIRS[s];
+  const saved = store.settings[dirSetting(s)];
+  return opts.indexOf(saved) === -1 ? opts[0] : saved;
+}
+export let dir = savedDir(script);
 export let GROUPS = SCRIPTS[script].groups;
 // The two switches on the home screen are the only things that may move these,
 // so they move them through here: an imported binding cannot be assigned from
@@ -78,14 +88,23 @@ export let GROUPS = SCRIPTS[script].groups;
 export function setScript(s) {
   script = s;
   GROUPS = SCRIPTS[script].groups;
+  dir = savedDir(script);
   store.settings.script = script;
   saveStore();
 }
 export function setDir(d) {
   dir = d;
-  store.settings.dir = dir;
+  store.settings[dirSetting(script)] = dir;
   saveStore();
 }
+
+// A card in the mixed mode has two faces — the same sound written each way —
+// and which of them is the question and which is the answer is the direction.
+// In every other mode a card has one face and both of these are it, which is
+// what lets the drill be written once and asked three ways.
+export function mixing() { return dir === "h2k" || dir === "k2h"; }
+export function askFace(card) { return dir === "k2h" ? toKatakana(card.k) : card.k; }
+export function ansFace(card) { return dir === "h2k" ? toKatakana(card.k) : card.k; }
 export function groupKey(gi) { return script + ":" + dir + ":" + GROUPS[gi].name; }
 export function reviewKey() { return script + ":" + dir + ":review"; }
 export function saveStore() {

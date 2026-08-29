@@ -3,7 +3,7 @@
 // every mode downstream takes that one shape, so none of them has to care
 // whether it is drilling a single group or everything learned so far.
 
-import { CHEERS, toKatakana } from "./kana.js";
+import { CHEERS, DIRS, toKatakana } from "./kana.js";
 import { LEARNED_AT } from "./config.js";
 import { store, saveStore, today, script, dir, GROUPS, groupKey, groupState } from "./store.js";
 
@@ -41,12 +41,14 @@ export function deckForGroup(gi) {
 }
 
 // Every character the learner can read: at LEARNED_AT or better anywhere in
-// the current script, in either direction. Recognizing a shape is one skill
-// however it was drilled, so a deck learned sound → kana still counts here.
+// the current mode, in either of its directions. Recognizing a shape is one
+// skill however it was drilled, so a deck learned sound → kana still counts
+// here — but only within the mode, because the mixed decks are keyed by the
+// hiragana face of a sound and say nothing about reading it off romaji.
 export function learnedKana() {
   const known = new Set();
   GROUPS.forEach((g, gi) => {
-    for (const d of ["sound", "read"]) {
+    for (const d of DIRS[script]) {
       const st = d === dir ? groupState(gi) : store.groups[script + ":" + d + ":" + g.name];
       if (!st || st.length !== g.cards.length) continue;
       g.cards.forEach((card, ci) => { if (st[ci][0] >= LEARNED_AT) known.add(card.k); });
