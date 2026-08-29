@@ -1,0 +1,205 @@
+/* The practice screen: the prompt, the answer tiles, the progress pie, and the
+   three interludes -- a confusion compared, a round finished, a group done. */
+
+/* ---------- session ---------- */
+.session-bar {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem 0 .25rem;
+}
+.session-bar .icon-btn { margin-left: -.75rem; }
+.session-title { font-weight: 650; font-size: 1rem; flex: 1; }
+
+.stage {
+  margin-top: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  box-shadow: var(--shadow);
+  padding: 1rem .75rem;
+  min-height: 22rem;
+  display: flex;
+  flex-direction: column;
+}
+.prompt-zone {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  position: relative;
+  padding: .25rem 0 1rem;
+}
+.kana-big {
+  font-size: clamp(5.5rem, 28vw, 8rem);
+  line-height: 1.1;
+  font-weight: 500;
+  animation: kanaIn .2s ease-out;
+}
+.kana-big.two { font-size: clamp(3.25rem, 17vw, 5rem); }
+@keyframes kanaIn { from { opacity: 0; transform: scale(.96); } }
+
+/* the reading is the prompt; the kana are the four answers */
+.prompt {
+  display: grid;
+  gap: .4rem;
+  place-items: center;
+  padding: .75rem 1.75rem;
+  border-radius: 1rem;
+  transition: background .15s;
+}
+@media (hover: hover) { .prompt:hover { background: var(--bg); } }
+.romaji-big {
+  font-size: clamp(3.25rem, 17vw, 4.5rem);
+  line-height: 1.1;
+  font-weight: 500;
+  letter-spacing: .06em;
+  animation: kanaIn .2s ease-out;
+}
+.prompt-hint {
+  font-size: .68rem;
+  color: var(--muted);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+[data-sound="off"] .prompt-hint { visibility: hidden; }
+
+/* Chrome reads a drag that starts on a tile as a pan — the URL bar slides, the
+   pointer is canceled, and the tap is gone. Nothing here scrolls, so the tile
+   keeps the gesture. The declaration is written twice so browsers without
+   pinch-zoom fall back to manipulation rather than to auto. */
+.answer, .prompt {
+  touch-action: manipulation;
+  touch-action: pinch-zoom;
+}
+.answers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .625rem;
+  container-type: inline-size;
+  position: relative;
+}
+/* the original's cake diagram: gray is what's left, amber the progress made,
+   green the share of that progress earned without a miss */
+.pie {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin: -1.25rem 0 0 -1.25rem;
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px var(--border), 0 0 0 .3rem var(--surface);
+  background: conic-gradient(
+    var(--good) 0 var(--clean),
+    var(--warn) var(--clean) var(--done),
+    var(--track) var(--done) 100%
+  );
+}
+.answer {
+  /* width comes from the grid track; the ratio sets height from it, and on a
+     short screen the tiles lose height rather than the grid losing a row */
+  width: 100%;
+  aspect-ratio: 1 / 1.1;
+  max-height: calc((100dvh - 21rem) / 2);
+  min-height: 4.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 1.125rem;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  line-height: 1;
+  font-size: clamp(3rem, 21vw, 7rem);
+  transition: background .15s, border-color .15s, color .15s, transform .1s;
+  position: relative;
+}
+.answer.two { font-size: clamp(2rem, 13vw, 4.5rem); }
+.answer.roman { font-size: clamp(1.4rem, 8vw, 2.2rem); font-weight: 650; letter-spacing: .04em; }
+/* scale the kana against the answer grid itself rather than the viewport,
+   so the tiles stay right once the 30rem container stops growing */
+@supports (font-size: 1cqw) {
+  .answer { font-size: 28cqw; }
+  .answer.two { font-size: 17cqw; }
+  .answer.roman { font-size: 9cqw; }
+}
+@media (hover: hover) { .answer:hover:not(:disabled) { border-color: var(--indigo); } }
+.answer:active:not(:disabled) { transform: scale(.98); }
+.answer .key {
+  position: absolute;
+  top: .3rem;
+  left: .5rem;
+  font-size: .65rem;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+@media (hover: none) and (pointer: coarse) {
+  .answer .key { display: none; }
+}
+.answer.correct { background: var(--good-soft); border-color: var(--good); color: var(--good); }
+.answer.wrong { background: var(--bad-soft); border-color: var(--seal); color: var(--seal); animation: shake .3s; }
+.answer:disabled { cursor: default; }
+@keyframes shake {
+  25% { transform: translateX(-4px); }
+  50% { transform: translateX(4px); }
+  75% { transform: translateX(-2px); }
+}
+
+@keyframes stageIn { from { opacity: 0; transform: translateY(8px); } }
+
+/* a character's first appearance: marked in place, no separate screen */
+.answer.new {
+  border-color: var(--indigo);
+  background: var(--indigo-soft);
+  color: var(--indigo);
+  animation: newTile .3s ease-out;
+}
+@keyframes newTile { from { transform: scale(.94); } }
+.primary-btn {
+  min-height: 3.25rem;
+  border-radius: .875rem;
+  background: var(--sel);
+  color: var(--sel-ink);
+  font-weight: 600;
+  font-size: 1rem;
+  transition: opacity .15s, transform .1s;
+}
+@media (hover: hover) { .primary-btn:hover { opacity: .9; } }
+.primary-btn:active { transform: scale(.98); }
+.ghost-btn {
+  min-height: 3.25rem;
+  border-radius: .875rem;
+  border: 1px solid var(--border-strong);
+  font-weight: 600;
+  font-size: 1rem;
+}
+@media (hover: hover) { .ghost-btn:hover { border-color: var(--indigo); } }
+
+.session-foot { margin-top: .25rem; display: grid; place-items: center; }
+
+/* compare — a repeated mix-up puts both characters side by side */
+.compare { text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 1rem; animation: stageIn .25s ease-out; }
+.compare h2 { font-size: 1.2rem; }
+.compare-row { display: flex; justify-content: center; gap: .75rem; }
+.compare-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .25rem;
+  padding: 1rem 1.25rem .75rem;
+  min-width: 7.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 1.125rem;
+  background: var(--bg);
+}
+@media (hover: hover) { .compare-card:hover { border-color: var(--indigo); } }
+.compare-kana { font-size: clamp(3.25rem, 16vw, 4.5rem); line-height: 1.15; font-weight: 500; }
+.compare-romaji { color: var(--muted); font-weight: 650; }
+.compare-sub { color: var(--muted); font-size: .85rem; }
+.compare .primary-btn { margin: .25rem auto 0; min-width: 11rem; }
+
+/* mastered */
+.mastered { text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 1rem; animation: stageIn .25s ease-out; }
+.mastered .kana-big { font-size: 4rem; }
+.mastered h2 { font-size: 1.3rem; }
+.mastered p { color: var(--muted); font-size: .9rem; }
+.mastered-actions { display: grid; gap: .625rem; margin-top: .5rem; }

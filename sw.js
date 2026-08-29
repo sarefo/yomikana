@@ -1,6 +1,17 @@
 "use strict";
-const CACHE = "yomikana-v16";
-const ASSETS = ["./", "index.html", "manifest.webmanifest", "icon.svg"];
+const CACHE = "yomikana-v17";
+// Every file the app is made of, because a module the cache has never heard of
+// is a blank screen the first time the phone is offline: the page itself would
+// come back, ask for its imports, and get nothing. The list is kept by hand and
+// has to grow with the app — a new module that is not named here works for as
+// long as the network lasts and no longer.
+const ASSETS = [
+  "./", "index.html", "manifest.webmanifest", "icon.svg",
+  "css/base.css", "css/home.css", "css/session.css",
+  "js/main.js", "js/config.js", "js/kana.js", "js/store.js", "js/deck.js",
+  "js/views.js", "js/home.js", "js/quiz.js",
+  "js/settings.js", "js/speech.js", "js/tap.js",
+];
 
 self.addEventListener("install", e => {
   e.waitUntil(

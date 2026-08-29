@@ -1,0 +1,196 @@
+/* The lessons screen: the switches, the refresh strip and the deck of tiles. */
+
+/* ---------- home ---------- */
+#home { display: flex; flex-direction: column; height: 100%; padding-bottom: 1rem; }
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .5rem 0 .875rem;
+}
+.brand { display: flex; align-items: center; gap: .75rem; }
+.brand-seal {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: .625rem;
+  background: var(--seal);
+  color: var(--seal-ink);
+  display: grid;
+  place-items: center;
+  font-size: 1.35rem;
+  line-height: 1;
+  transform: rotate(-4deg);
+  flex: none;
+}
+.brand h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.01em; }
+.brand small { display: block; font-size: .75rem; font-weight: 400; color: var(--muted); letter-spacing: .04em; }
+.toggles { display: flex; gap: .25rem; }
+.icon-btn {
+  width: 3rem;
+  height: 3rem;
+  border-radius: .75rem;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  transition: background .15s, color .15s;
+}
+/* Hover is a mouse's business. A finger leaves it stuck on the element it last
+   touched, so on a phone the hover border outlives the tap that set it — and
+   the next question inherits it on whatever tile is drawn in that spot. */
+@media (hover: hover) { .icon-btn:hover { background: var(--surface); color: var(--ink); } }
+.icon-btn svg { width: 1.25rem; height: 1.25rem; }
+.icon-btn .alt { display: none; }
+[data-sound="off"] #soundBtn .main { display: none; }
+[data-sound="off"] #soundBtn .alt { display: block; }
+[data-theme="dark"] #themeBtn .main { display: none; }
+[data-theme="dark"] #themeBtn .alt { display: block; }
+
+/* script and direction are two small either/or choices, so they share a row:
+   one pill each, side by side, in the space one used to take */
+.switch-row { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-bottom: .75rem; }
+.script-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: .875rem;
+  padding: .25rem;
+  box-shadow: var(--shadow);
+}
+.script-switch button {
+  min-height: 2.375rem;
+  border-radius: .625rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .3rem;
+  color: var(--muted);
+  font-size: clamp(.68rem, 3vw, .78rem);
+  font-weight: 600;
+  letter-spacing: .04em;
+  transition: background .15s, color .15s;
+}
+.script-switch .native { font-size: 1.1em; font-weight: 500; letter-spacing: .02em; }
+.script-switch button[aria-selected="true"] { background: var(--sel); color: var(--sel-ink); }
+/* the direction switch borrows the script switch's frame, one size up because
+   its labels are two characters and an arrow rather than a word */
+.dir-switch button { font-size: clamp(.78rem, 3.4vw, .9rem); letter-spacing: .04em; }
+
+/* The way back into everything already learned. It sits above the deck rather
+   than in it because what has gone stale is spread across the groups, not
+   parked in any one of them; it stays hidden until there is something to
+   refresh, so a first run still shows the eight tiles and nothing else. */
+.refresh-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: .1rem .625rem;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: .55rem .75rem;
+  margin-bottom: .625rem;
+  box-shadow: var(--shadow);
+  transition: transform .15s, box-shadow .15s, border-color .15s;
+}
+@media (hover: hover) { .refresh-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-lift); border-color: var(--border-strong); } }
+.refresh-card:active { transform: translateY(0); }
+.refresh-card > svg { width: 1.15rem; height: 1.15rem; grid-row: span 2; color: var(--indigo); }
+.refresh-card.rusty > svg { color: var(--warn); }
+.refresh-title { display: flex; align-items: baseline; gap: .4rem; font-weight: 650; font-size: .88rem; }
+.refresh-count { font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.refresh-count b { color: var(--indigo); font-weight: 650; }
+.refresh-sub { font-size: .72rem; color: var(--muted); }
+.refresh-bar { grid-column: 1 / -1; height: .25rem; margin-top: .4rem; border-radius: 999px; background: var(--indigo-soft); overflow: hidden; }
+.refresh-bar > i { display: block; height: 100%; background: var(--indigo); border-radius: 999px; transition: width .3s; }
+
+/* Four rows of two, taking whatever height the rest of the screen leaves over.
+   This used to be a clamp against a hand-counted budget of everything the grid
+   is not, which had to be re-measured every time a control was added or moved,
+   and was wrong — and the deck scrolled — whenever it was not. Claiming the
+   leftover space instead is the same intent with nothing to keep in step: a
+   short screen loses tile height, never a row, and the footer stays put.
+   The cap keeps a desktop from blowing the tiles up to fill a tall window. */
+.groups {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  gap: .625rem;
+  flex: 1;
+  min-height: 0;
+  max-height: 32.375rem;
+  list-style: none;
+}
+.group-card {
+  width: 100%;
+  height: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: .5rem .625rem;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  overflow: hidden;
+  container-type: size;
+  transition: transform .15s, box-shadow .15s, border-color .15s;
+}
+@media (hover: hover) { .group-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-lift); border-color: var(--border-strong); } }
+.group-card:active { transform: translateY(0); }
+/* one character of the group, sunk into the tile: it names the script at a
+   glance without turning the tile back into a character list, and it fills
+   the middle of the tile that the two lines of text leave empty */
+.group-mark {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  font-size: 2.25rem;
+  line-height: 1;
+  color: var(--ink);
+  opacity: .13;
+  pointer-events: none;
+}
+.group-mark.two { font-size: 1.4rem; }
+/* sized off the tile rather than the root, so it shrinks with the rows on a
+   short screen instead of overrunning them */
+@supports (font-size: 1cqh) {
+  .group-mark { font-size: 44cqh; }
+  .group-mark.two { font-size: 27cqh; }
+}
+.group-top { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+.group-index { font-size: .7rem; color: var(--muted); }
+.group-count { font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.group-count b { color: var(--indigo); font-weight: 650; }
+.group-card.full .group-count, .group-card.full .group-count b { color: var(--good); }
+.group-name { font-weight: 650; font-size: .88rem; line-height: 1.2; }
+.group-bar { height: .25rem; border-radius: 999px; background: var(--indigo-soft); overflow: hidden; }
+.group-bar > i { display: block; height: 100%; background: var(--indigo); border-radius: 999px; transition: width .3s; }
+.group-card.full .group-bar > i { background: var(--good); }
+.home-foot { margin-top: auto; padding-top: .75rem; font-size: .8rem; color: var(--muted); text-align: center; }
+.app-version { margin-top: .25rem; font-size: .65rem; color: var(--muted); opacity: .55; }
+/* why the drill has gone quiet, said where the silence is noticed */
+.audio-note { margin-top: .35rem; font-size: .72rem; color: var(--warn); text-align: center; }
+.audio-note:empty { display: none; }
+/* one fixed-height slot holds the button, the confirmation and the receipt in
+   turn, so swapping between them never shifts the page under a thumb */
+.reset-zone { margin-top: .75rem; min-height: 2.75rem; display: grid; place-items: center; }
+.link-btn {
+  min-height: 2.75rem;
+  padding: 0 .75rem;
+  font-size: .8rem;
+  color: var(--muted);
+  border-radius: .5rem;
+  text-decoration: underline;
+  text-underline-offset: .2em;
+}
+@media (hover: hover) { .link-btn:hover { color: var(--ink); background: var(--surface); } }
+.link-btn.danger { color: var(--seal); font-weight: 650; }
+.reset-confirm { display: flex; align-items: center; justify-content: center; gap: .125rem; flex-wrap: wrap; }
+.reset-done { color: var(--good); font-weight: 650; }
+
