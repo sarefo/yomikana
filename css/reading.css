@@ -12,7 +12,7 @@
   padding: .5rem 0 1.5rem;
 }
 
-/* The word itself, and it has to hold anything from two characters to eight.
+/* The word itself, and it has to hold anything from two characters to ten.
    The size comes down as the line grows rather than the line wrapping: a
    reading exercise that breaks its word across two lines has moved the
    difficulty out of the characters and into the layout. Three steps rather
@@ -82,14 +82,25 @@
 }
 @keyframes slotIn { from { opacity: 0; transform: translateY(-.25rem); } }
 
-/* what a finished word turns out to have meant */
+/* What a finished word turns out to have meant. This is the whole reward for
+   getting through it, and set in fine print it read like a footnote to the
+   exercise rather than the point of it — so it arrives at the size of an
+   answer. It steps down for the occasional long gloss so a two-word meaning
+   never wraps into three lines. */
 .gloss {
-  margin-top: .75rem;
+  /* the zone's own gap already separates it from the reading above */
+  margin: 0;
   text-align: center;
-  font-size: .95rem;
-  color: var(--muted);
+  font-size: clamp(1.4rem, 7vw, 1.9rem);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink);
   animation: slotIn .2s ease-out;
 }
+.gloss.long { font-size: clamp(1.1rem, 5.2vw, 1.45rem); }
+/* its line before it has anything to say, holding the space it will need —
+   sized as the real thing so that revealing it moves nothing at all */
+.gloss.pending { visibility: hidden; animation: none; }
 
 /* The bank. Unlike the drill's four answers these are not a fixed grid -- a
    word needs as many tiles as it has characters -- so they wrap, and stay wide
@@ -133,3 +144,17 @@
   animation: shake .3s;
 }
 .tile:disabled { cursor: default; }
+
+/* A long word brings a long bank with it, and a small phone does not have room
+   for both, plus the reading being built, plus the meaning underneath: the
+   bottom row of tiles ends up below the fold, which on a screen answered by
+   tapping is the same as not being there. So a big item tightens everything at
+   once rather than letting its last row slide out of reach. */
+.read-zone.tight { gap: .8rem; padding: .25rem 0 .75rem; }
+.read-zone.tight .slot { min-height: 1.8rem; font-size: 1rem; }
+.read-zone.tight .gloss { font-size: clamp(1.2rem, 5.5vw, 1.55rem); }
+.read-zone.tight .gloss.long { font-size: clamp(1rem, 4.4vw, 1.3rem); }
+.read-zone.tight + .bank { gap: .4rem; }
+.read-zone.tight + .bank .tile { min-width: 3.4rem; min-height: 3.1rem; font-size: 1.9rem; }
+.read-zone.tight + .bank .tile.two { font-size: 1.35rem; }
+.read-zone.tight + .bank .tile.roman { font-size: 1.15rem; }

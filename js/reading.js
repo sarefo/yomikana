@@ -161,6 +161,12 @@ function renderItem() {
         : '<button class="read-word read-word-say' + size +
           '" id="word" aria-label="Play the reading again"></button>') +
       '<div class="slots" id="slots"></div>' +
+      // the meaning's line is claimed now and filled in at the end: arriving
+      // into space of its own, it cannot shove the tiles down mid-word — and a
+      // tile that moves under a finger already on its way is a wrong answer the
+      // learner did not give
+      '<p class="gloss pending' + (R.item.gloss.length > 16 ? " long" : "") +
+      '" id="gloss">&nbsp;</p>' +
     "</div>" +
     '<div class="bank">' +
     R.tiles.map((t, n) =>
@@ -170,6 +176,15 @@ function renderItem() {
     ).join("") +
     "</div>";
   paint();
+  // Everything has to be on the screen at once, because everything here is
+  // either read or tapped and neither survives being below the fold. What
+  // threatens that is not one thing but the sum of them — a ten-character word,
+  // a bank of twelve tiles, a small phone, the note that says the sound is
+  // broken — so the screen is measured rather than guessed at, and tightened if
+  // it does not fit.
+  if (document.documentElement.scrollHeight > innerHeight) {
+    stage.querySelector(".read-zone").classList.add("tight");
+  }
   stage.querySelectorAll(".tile").forEach(btn => onTap(btn, () => tapTile(btn)));
   if (!read) onTap(document.getElementById("word"), () => speak(R.item.kana));
   R.shownAt = performance.now();
@@ -253,8 +268,9 @@ function finishItem() {
   touchKana(new Set(R.item.units.map(u => u.k)));
   paint(true);
   const read = dir === "read";
-  document.getElementById("slots").insertAdjacentHTML("afterend",
-    '<p class="gloss">' + R.item.gloss + "</p>");
+  const gloss = document.getElementById("gloss");
+  gloss.textContent = R.item.gloss;
+  gloss.classList.remove("pending");
   // the reading direction withholds the sound until the word is right, the same
   // bargain the drill strikes with a single character
   if (read) speak(R.item.kana);
