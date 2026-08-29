@@ -23,7 +23,7 @@ import {
   READING_WRONG_FLASH,
 } from "./config.js";
 import {
-  store, saveStore, script, dir, missKey, pairCount, shareLevels,
+  store, saveStore, script, dir, pairCount, onProbation, recordMiss, shareLevels,
 } from "./store.js";
 import { learnedKana, touchKana, cheer } from "./deck.js";
 import { readableWords } from "./words.js";
@@ -110,6 +110,9 @@ function buildTiles(item) {
   const spare = [];
   for (const k of learnedKana()) {
     if (wanted.has(k) || spoken.has(READINGS.get(k))) continue;
+    // a pair the drill is testing apart stays apart here too: the tile bank is
+    // the one other place the app could hand the partner straight back
+    if (item.units.some(u => u.k !== CHOON && onProbation(k, u.k))) continue;
     spare.push({
       k,
       near: item.units.reduce((s, u) => s + (u.k === CHOON ? 0 : pairCount(k, u.k)), 0),
@@ -245,8 +248,7 @@ function tapTile(btn) {
     // mark is left out of it: it is not a character anybody confuses, and it has
     // no card for the record to attach to.
     if (t.k !== CHOON && want.k !== CHOON) {
-      const mk = missKey(want.k, t.k);
-      store.pairs[mk] = Math.min((store.pairs[mk] || 0) + 1, 9);
+      recordMiss(want.k, t.k);
       saveStore();
     }
     return;

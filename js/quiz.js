@@ -11,7 +11,8 @@ import {
 } from "./config.js";
 import {
   store, saveStore, today, leech, dir, mixing, askFace, ansFace,
-  groupKey, reviewKey, missKey, pairKey, pairCount, shareLevels,
+  groupKey, reviewKey, pairKey, pairCount, onProbation,
+  recordMiss, clearMiss, soloPartners, creditSolo, shareLevels,
 } from "./store.js";
 import { reviewDeck, deckForGroup, cheer } from "./deck.js";
 import { stage, openSession, exitSession, showFoot } from "./views.js";
@@ -245,7 +246,7 @@ function renderQuestion(isNew) {
   // make a refresh easier than the drill it is refreshing.
   const pool = S.deck;
   const mixed = mixing();
-  const near = [], far = [], rivals = [];
+  const near = [], far = [], rivals = [], barred = [];
   for (let i = 0; i < pool.length; i++) {
     if (i === correct) continue;
     // In the two romaji directions a tile reading the same as the right one is
@@ -253,6 +254,10 @@ function renderQuestion(isNew) {
     // from their own groups both are "ji". Asked in kana the prompt says which
     // of the two is wanted, so there the pair is free to meet.
     if (!mixed && pool[i].r === pool[correct].r) continue;
+    // a pair on probation is barred rather than preferred: it has stopped being
+    // confused and is now being asked to hold up apart, which cannot be tested
+    // on a screen the partner is standing on
+    if (onProbation(ansOf(i), ansOf(correct))) { barred.push(i); continue; }
     if (pairCount(ansOf(i), ansOf(correct))) { rivals.push(i); continue; }
     (pool[i].keys.some(k => pool[correct].keys.includes(k)) ? near : far).push(i);
   }
@@ -262,7 +267,9 @@ function renderQuestion(isNew) {
   rivals.sort((a, b) => pairCount(ansOf(b), ansOf(correct)) - pairCount(ansOf(a), ansOf(correct)));
   const picks = [correct, ...rivals.splice(0, 2)];
   near.push(...rivals);
-  for (const bag of [near, far]) {
+  // barred last of all, and only to keep a thin deck from serving three tiles:
+  // a question short of choices is easier than one with the partner on it
+  for (const bag of [near, far, barred]) {
     while (picks.length < 4 && bag.length) {
       picks.push(bag.splice(Math.floor(Math.random() * bag.length), 1)[0]);
     }
@@ -344,8 +351,7 @@ function answer(btn) {
     // card's canonical one: what was mistaken for what is a fact about two
     // shapes, so a シ taken for ツ in the mixed mode is the same confusion the
     // katakana drill records, and the two modes should hand it back and forth
-    const mk = missKey(ansOf(S.current), ansOf(chosen));
-    store.pairs[mk] = Math.min((store.pairs[mk] || 0) + 1, 9);
+    recordMiss(ansOf(S.current), ansOf(chosen));
     // a repeat of a known confusion has earned a side-by-side look once the
     // question resolves; a first slip is just a miss. Either order counts
     // toward it — the screen answers a muddled pair, not a muddled direction
@@ -389,8 +395,14 @@ function answer(btn) {
     // nothing yet about た being taken for だ, which is its own debt.
     for (const i of S.picks) {
       if (i === S.current) continue;
-      const mk = missKey(ansOf(S.current), ansOf(i));
-      if (store.pairs[mk] && --store.pairs[mk] === 0) delete store.pairs[mk];
+      clearMiss(ansOf(S.current), ansOf(i));
+    }
+    // and the other half of the cure: a character answered right with a
+    // probation partner nowhere on the buttons is the one thing the contrast
+    // could not have supplied. Two of those and the confusion is off the books.
+    const onScreen = new Set(S.picks.map(i => ansOf(i)));
+    for (const partner of soloPartners(ansOf(S.current))) {
+      if (!onScreen.has(partner)) creditSolo(ansOf(S.current), partner);
     }
     S.forced = -1;
     if (card[0] < MAX_LEVEL - 1) {

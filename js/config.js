@@ -63,10 +63,23 @@ export const DECAY_FLOOR = 1;
 export const MISS_CAP = 6;
 export const MISS_WEIGHT = 0.25;
 
+// A cleared confusion is not a finished one. Every debt is worked off with the
+// rival sitting on the buttons — that is where the drill puts it — so what the
+// learner holds at zero is the contrast, and a contrast wobbles when the
+// partner is not on the screen. A cleared pair therefore goes on probation:
+// kept apart, and owing this many clean answers with the other one nowhere in
+// sight before the confusion is called cured. Two rather than one, because a
+// single lucky tap on a four-tile question is a coin flip, not evidence.
+export const SOLO_CONFIRMATIONS = 2;
+// And where a relapse lands. Not back at the start: a pair that comes apart
+// again after being called cured is exactly a pair worth putting on the screen
+// side by side, and that screen is earned at two.
+export const RELAPSE_DEBT = 2;
+
 // Shown at the foot of the home screen so a phone can tell whether the newest
 // build has actually landed. Bump on every release, together with the CACHE
 // name in sw.js.
-export const APP_VERSION = "v21";
+export const APP_VERSION = "v22";
 // Reading practice. An item is a whole word rather than a single character, so
 // a round is shorter than the drill's. The ramp is what keeps a session from
 // opening on a phrase: the first items are short, and the cap lifts every few

@@ -1,5 +1,5 @@
 "use strict";
-const CACHE = "yomikana-v21";
+const CACHE = "yomikana-v22";
 // Every file the app is made of, because a module the cache has never heard of
 // is a blank screen the first time the phone is offline: the page itself would
 // come back, ask for its imports, and get nothing. The list is kept by hand and

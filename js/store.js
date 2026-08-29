@@ -5,7 +5,10 @@
 // and which direction is being drilled.
 
 import { SCRIPTS, DIRS, toKatakana } from "./kana.js";
-import { DECAY_DAYS, DECAY_FLOOR, MISS_CAP, MISS_WEIGHT } from "./config.js";
+import {
+  DECAY_DAYS, DECAY_FLOOR, MISS_CAP, MISS_WEIGHT,
+  SOLO_CONFIRMATIONS, RELAPSE_DEBT,
+} from "./config.js";
 
 export function today() { return Math.floor(Date.now() / 864e5); }
 // 1 for a card never missed, up to 2.5 for the worst of them. It divides the
@@ -122,10 +125,75 @@ export function saveStore() {
 // about whether た still looks like だ when た is.
 export function missKey(asked, tapped) { return asked + ">" + tapped; }
 export function pairKey(a, b) { return a < b ? a + "|" + b : b + "|" + a; }
+
+// A pair has three states, and one number under each direction's key holds all
+// of them. Positive is a debt still owed. Zero is a direction already cleared,
+// waiting on the other one. Negative is probation — the clean solo answers
+// still wanted before the confusion is forgotten.
+//
+// Probation exists because of how a debt gets paid: with the rival on the
+// buttons, since that is exactly where the drill puts it. What reaches zero
+// that way is the contrast, which holds only while both shapes are on the
+// screen at once. So a cleared pair is kept apart instead of dropped, and each
+// character has to hold up alone before the record goes.
+
 // how often the two have been mixed up, whichever way round it ran: which
-// characters need to keep meeting on the buttons is a fact about the pair
+// characters need to keep meeting on the buttons is a fact about the pair.
+// Probation counts for nothing here — a pair on it is owed nothing and, more
+// to the point, must not be seated together.
 export function pairCount(a, b) {
-  return (store.pairs[missKey(a, b)] || 0) + (store.pairs[missKey(b, a)] || 0);
+  return Math.max(0, store.pairs[missKey(a, b)] || 0) +
+         Math.max(0, store.pairs[missKey(b, a)] || 0);
+}
+// whether the two are being tested apart, in either direction
+export function onProbation(a, b) {
+  return (store.pairs[missKey(a, b)] || 0) < 0 || (store.pairs[missKey(b, a)] || 0) < 0;
+}
+
+// One mix-up, from wherever it happened — the drill and reading practice write
+// to the same books, because taking シ for ツ is one fact about two shapes.
+export function recordMiss(asked, tapped) {
+  const mk = missKey(asked, tapped), bk = missKey(tapped, asked);
+  const prev = store.pairs[mk] || 0;
+  store.pairs[mk] = prev < 0 ? RELAPSE_DEBT : Math.min(prev + 1, 9);
+  // the other half comes off probation with it: one direction owing while the
+  // other is kept apart would leave that debt unpayable, the two never being
+  // allowed to meet on the buttons to work it off
+  if ((store.pairs[bk] || 0) < 0) store.pairs[bk] = 0;
+}
+
+// One won discrimination: this rival was on the buttons and was not fallen for.
+export function clearMiss(asked, tapped) {
+  const mk = missKey(asked, tapped);
+  if (!(store.pairs[mk] > 0) || --store.pairs[mk] > 0) return;
+  // Cleared — but the pair only goes on probation once neither direction owes
+  // anything, including one cleared earlier and held at zero waiting for this.
+  // Both halves go on it together: both were confused, so both need proving
+  // apart, and keeping them in step is what lets the bar be read off the pair.
+  const bk = missKey(tapped, asked);
+  if ((store.pairs[bk] || 0) > 0) return;
+  store.pairs[mk] = -SOLO_CONFIRMATIONS;
+  if (bk in store.pairs) store.pairs[bk] = -SOLO_CONFIRMATIONS;
+}
+
+// The characters this prompt is being kept apart from: its partners on
+// probation, waiting to see it answered without them.
+export function soloPartners(asked) {
+  const out = [], pre = asked + ">";
+  for (const k of Object.keys(store.pairs)) {
+    if (store.pairs[k] < 0 && k.slice(0, pre.length) === pre) out.push(k.slice(pre.length));
+  }
+  return out;
+}
+// One clean answer with the partner nowhere on the screen — the evidence
+// probation exists to collect. At the last of them the record goes.
+export function creditSolo(asked, partner) {
+  const mk = missKey(asked, partner);
+  if (!(store.pairs[mk] < 0) || ++store.pairs[mk] < 0) return;
+  delete store.pairs[mk];
+  // and tidy away the other direction if it was only ever a cleared zero
+  const bk = missKey(partner, asked);
+  if (store.pairs[bk] === 0) delete store.pairs[bk];
 }
 // [level, next, introduced, lastDay, misses]
 export function groupState(gi) {
