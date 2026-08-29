@@ -11,17 +11,10 @@ setHomeRenderer(renderHome);
 
 document.getElementById("appVersion").textContent = APP_VERSION;
 renderHome();
-if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  // A new build has finished downloading, so the code running here is already
-  // the old one. It is swapped in on the next load, and the next load is
-  // arranged for the first moment the lessons screen is showing — never in the
-  // middle of a round, where a reload reads as the app quitting on its own.
-  navigator.serviceWorker.addEventListener("message", e => {
-    if (e.data && e.data.type === "upgraded") whenIdle(() => location.reload());
-  });
-  // addEventListener alone leaves the messages queued: the delivery only starts
-  // on an onmessage assignment or on this call, and without it the worker is
-  // talking to nobody
-  navigator.serviceWorker.startMessages();
-  navigator.serviceWorker.register("sw.js").catch(() => { /* offline still works next load */ });
-}
+
+// What the boot script in index.html asks for when the worker announces a new
+// build: the code running here is already the old one, and it is swapped in on
+// the next load — which is arranged for the first moment the lessons screen is
+// showing, never in the middle of a round. The worker is registered over there
+// rather than here on purpose; the comment on it says why.
+window.takeUpgrade = () => whenIdle(() => location.reload());

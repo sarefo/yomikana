@@ -86,6 +86,34 @@
   </div>
 </main>
 
+<!-- Registering the worker is the one thing that cannot wait for the app. It is
+     the road every later build arrives by, so hanging it off the module graph
+     makes the one build that cannot boot also the one nothing can upgrade away
+     from — which is exactly how a page that threw on load once sat there dead
+     while a fix for it was already published. Plain script, no imports, so it
+     runs whatever the modules below do. -->
+<script>
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  navigator.serviceWorker.addEventListener("message", function (e) {
+    if (!e.data || e.data.type !== "upgraded") return;
+    // the app picks a moment the reload costs nothing — never mid-round, where
+    // it reads as quitting on its own. It is given until it has had its chance
+    // to boot to say so; if it never got that far there is no session to lose
+    // and nobody to ask.
+    var take = function () {
+      if (window.takeUpgrade) window.takeUpgrade();
+      else location.reload();
+    };
+    if (document.readyState === "complete") take();
+    else addEventListener("load", take);
+  });
+  // addEventListener alone leaves the messages queued: delivery starts on an
+  // onmessage assignment or on this call, and without it the worker is talking
+  // to nobody
+  navigator.serviceWorker.startMessages();
+  navigator.serviceWorker.register("sw.js").catch(function () { /* offline still works next load */ });
+}
+</script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

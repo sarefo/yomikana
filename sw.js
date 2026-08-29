@@ -1,5 +1,5 @@
 "use strict";
-const CACHE = "yomikana-v20";
+const CACHE = "yomikana-v21";
 // Every file the app is made of, because a module the cache has never heard of
 // is a blank screen the first time the phone is offline: the page itself would
 // come back, ask for its imports, and get nothing. The list is kept by hand and
@@ -48,19 +48,24 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET") return;
 
   if (req.mode === "navigate") {
-    // network first for the page itself, so a new build lands on the next load
-    // rather than the one after; the cache still covers being offline
-    e.respondWith(
-      fetch(req)
-        .then(res => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then(c => c.put("index.html", copy));
-          }
-          return res;
-        })
-        .catch(() => caches.match("index.html").then(hit => hit || caches.match("./")))
-    );
+    // The page comes from the cache like everything else it is made of, and for
+    // the same reason they all have to come from one place: the page is the
+    // manifest of which modules go with it. Fetched from the network while its
+    // scripts are still served from the cache, a new document is wired to old
+    // code — which survives for as long as the markup happens not to change,
+    // and on the release where it does is a blank screen with a stack trace
+    // behind it. So a build lands whole or not at all: the new one installs
+    // underneath this one, and the page takes it on the reload it arranges for
+    // itself, one load later than it used to and never half of it.
+    e.respondWith((async () => {
+      const hit = await caches.match(req, { ignoreSearch: true }) ||
+                  await caches.match("index.html") ||
+                  await caches.match("./");
+      if (hit) return hit;
+      const res = await fetch(req);
+      if (res.ok) caches.open(CACHE).then(c => c.put("index.html", res.clone()));
+      return res;
+    })());
     return;
   }
 
