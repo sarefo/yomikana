@@ -66,4 +66,22 @@ export const MISS_WEIGHT = 0.25;
 // Shown at the foot of the home screen so a phone can tell whether the newest
 // build has actually landed. Bump on every release, together with the CACHE
 // name in sw.js.
-export const APP_VERSION = "v17";
+export const APP_VERSION = "v18";
+// Reading practice. An item is a whole word rather than a single character, so
+// a round is shorter than the drill's. The ramp is what keeps a session from
+// opening on a phrase: the first items are short, and the cap lifts every few
+// solved, so a round that starts on すし can finish on ありがとう.
+export const READING_ROUND = 10;
+export const READING_START_UNITS = 3;  // the longest word offered at the start of a round
+export const READING_PER_STEP = 4;     // items solved before the cap goes up by one
+export const READING_DECOYS = 3;       // spare tiles beside the ones the word needs
+export const READING_TILE_CAP = 12;    // and never more tiles than this altogether
+// Below this there is not enough to read for a session to be worth opening, and
+// the card stays off the home screen rather than offering four words over again.
+export const READING_UNLOCK = 8;
+// How long a finished word holds the screen with its meaning under it.
+export const READING_HOLD = 1200;
+// And how long a wrong tile stays red before it can be tapped again. It has to
+// come back: a tile that is wrong at this character may be the right one two
+// along — ばなな needs な twice — so leaving it dead would strand the word.
+export const READING_WRONG_FLASH = 650;

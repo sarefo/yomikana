@@ -1,5 +1,5 @@
 "use strict";
-const CACHE = "yomikana-v17";
+const CACHE = "yomikana-v18";
 // Every file the app is made of, because a module the cache has never heard of
 // is a blank screen the first time the phone is offline: the page itself would
 // come back, ask for its imports, and get nothing. The list is kept by hand and
@@ -7,9 +7,9 @@ const CACHE = "yomikana-v17";
 // long as the network lasts and no longer.
 const ASSETS = [
   "./", "index.html", "manifest.webmanifest", "icon.svg",
-  "css/base.css", "css/home.css", "css/session.css",
+  "css/base.css", "css/home.css", "css/session.css", "css/reading.css",
   "js/main.js", "js/config.js", "js/kana.js", "js/store.js", "js/deck.js",
-  "js/views.js", "js/home.js", "js/quiz.js",
+  "js/views.js", "js/home.js", "js/quiz.js", "js/reading.js", "js/words.js",
   "js/settings.js", "js/speech.js", "js/tap.js",
 ];
 

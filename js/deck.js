@@ -5,7 +5,7 @@
 
 import { CHEERS, toKatakana } from "./kana.js";
 import { LEARNED_AT } from "./config.js";
-import { store, script, dir, GROUPS, groupKey, groupState } from "./store.js";
+import { store, saveStore, today, script, dir, GROUPS, groupKey, groupState } from "./store.js";
 
 // Everything introduced in the current script, one entry per character. Some
 // characters sit in more than one group -- た is in three, and the look-alike
@@ -70,4 +70,23 @@ export function cheer() {
       return true;
     });
   return pool.length ? pool[Math.floor(Math.random() * pool.length)] : "";
+}
+
+// Reading a character inside a word is not the drill, and does not raise a
+// level: recognizing す in すし is a different act from answering す on its
+// own, and the tiles measure the second one. It is not nothing either, though
+// — a character just read correctly is plainly not forgotten — so its clock is
+// set back to today and the fading stops there.
+export function touchKana(keep) {
+  const now = today();
+  let dirty = false;
+  GROUPS.forEach((g, gi) => {
+    const st = groupState(gi);
+    g.cards.forEach((card, ci) => {
+      if (!keep.has(card.k) || !st[ci][2] || st[ci][3] === now) return;
+      st[ci][3] = now;
+      dirty = true;
+    });
+  });
+  if (dirty) saveStore();
 }

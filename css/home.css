@@ -77,11 +77,12 @@
    its labels are two characters and an arrow rather than a word */
 .dir-switch button { font-size: clamp(.78rem, 3.4vw, .9rem); letter-spacing: .04em; }
 
-/* The way back into everything already learned. It sits above the deck rather
-   than in it because what has gone stale is spread across the groups, not
-   parked in any one of them; it stays hidden until there is something to
-   refresh, so a first run still shows the eight tiles and nothing else. */
-.refresh-card {
+/* The two ways in that are not a group. They sit above the deck rather than in
+   it because neither is parked in any one group: what has gone stale is spread
+   across all of them, and a word is readable once its characters are, wherever
+   they were learned. Both stay hidden until they have something to offer, so a
+   first run still shows the eight tiles and nothing else. */
+.home-card {
   width: 100%;
   display: grid;
   grid-template-columns: auto 1fr;
@@ -96,14 +97,14 @@
   box-shadow: var(--shadow);
   transition: transform .15s, box-shadow .15s, border-color .15s;
 }
-@media (hover: hover) { .refresh-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-lift); border-color: var(--border-strong); } }
-.refresh-card:active { transform: translateY(0); }
-.refresh-card > svg { width: 1.15rem; height: 1.15rem; grid-row: span 2; color: var(--indigo); }
+@media (hover: hover) { .home-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-lift); border-color: var(--border-strong); } }
+.home-card:active { transform: translateY(0); }
+.home-card > svg { width: 1.15rem; height: 1.15rem; grid-row: span 2; color: var(--indigo); }
 .refresh-card.rusty > svg { color: var(--warn); }
-.refresh-title { display: flex; align-items: baseline; gap: .4rem; font-weight: 650; font-size: .88rem; }
-.refresh-count { font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.refresh-count b { color: var(--indigo); font-weight: 650; }
-.refresh-sub { font-size: .72rem; color: var(--muted); }
+.card-title { display: flex; align-items: baseline; gap: .4rem; font-weight: 650; font-size: .88rem; }
+.card-count { font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.card-count b { color: var(--indigo); font-weight: 650; }
+.card-sub { font-size: .72rem; color: var(--muted); }
 .refresh-bar { grid-column: 1 / -1; height: .25rem; margin-top: .4rem; border-radius: 999px; background: var(--indigo-soft); overflow: hidden; }
 .refresh-bar > i { display: block; height: 100%; background: var(--indigo); border-radius: 999px; transition: width .3s; }
 

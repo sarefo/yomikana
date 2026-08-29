@@ -1,0 +1,135 @@
+/* Reading practice: the word across the top with the place you are up to
+   marked in it, the reading being built underneath, and the bank of tiles
+   below that. Two rows saying the same thing on purpose -- one is what there
+   is to read, the other is how far you have got with it. */
+
+.read-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: .5rem 0 1.5rem;
+}
+
+/* The word itself, and it has to hold anything from two characters to eight.
+   The size comes down as the line grows rather than the line wrapping: a
+   reading exercise that breaks its word across two lines has moved the
+   difficulty out of the characters and into the layout. Three steps rather
+   than one clamp, so a two-character word is as big as the drill's single
+   character instead of being sized for the phrase it might have been. */
+.read-word {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  line-height: 1.15;
+  font-weight: 500;
+  animation: kanaIn .2s ease-out;
+}
+.read-word.w-short { font-size: clamp(3.25rem, 18vw, 4.75rem); }
+.read-word.w-mid   { font-size: clamp(2.4rem, 13vw, 3.5rem); }
+.read-word.w-long  { font-size: clamp(1.7rem, 9.5vw, 2.5rem); }
+/* the sound direction's prompt is a button, because the reading can be replayed */
+.read-word-say {
+  padding: .4rem .75rem;
+  border-radius: 1rem;
+  letter-spacing: .04em;
+  transition: background .15s;
+}
+@media (hover: hover) { .read-word-say:hover { background: var(--bg); } }
+
+/* one character, or one combo, or the long mark: the piece the next tile has
+   to answer for */
+.ru {
+  padding: 0 .06em;
+  border-radius: .2em;
+  color: var(--muted);
+  transition: color .15s, background .15s;
+}
+.ru.done { color: var(--ink); }
+.ru.here {
+  color: var(--indigo);
+  background: var(--indigo-soft);
+  /* the tint alone is nearly invisible against the dark surface, and where the
+     reader is up to is the one thing on this screen that must not be guessed */
+  box-shadow: 0 .09em 0 var(--indigo);
+}
+
+/* the reading as it is assembled, one slot per character of the word */
+.slots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .3rem;
+}
+.slot {
+  min-width: 2.5rem;
+  min-height: 2.1rem;
+  padding: .15rem .35rem;
+  display: grid;
+  place-items: center;
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: .02em;
+  border-bottom: 2px solid var(--track);
+  color: var(--muted);
+}
+.slot.filled {
+  color: var(--ink);
+  border-bottom-color: var(--good);
+  animation: slotIn .18s ease-out;
+}
+@keyframes slotIn { from { opacity: 0; transform: translateY(-.25rem); } }
+
+/* what a finished word turns out to have meant */
+.gloss {
+  margin-top: .75rem;
+  text-align: center;
+  font-size: .95rem;
+  color: var(--muted);
+  animation: slotIn .2s ease-out;
+}
+
+/* The bank. Unlike the drill's four answers these are not a fixed grid -- a
+   word needs as many tiles as it has characters -- so they wrap, and stay wide
+   enough to hit with a thumb however many there are. */
+.bank {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .55rem;
+}
+.tile {
+  min-width: 4.25rem;
+  min-height: 4rem;
+  padding: .4rem .7rem;
+  display: grid;
+  place-items: center;
+  border-radius: .875rem;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  line-height: 1;
+  font-size: 2.3rem;
+  transition: background .15s, border-color .15s, color .15s, transform .1s, opacity .15s;
+  /* the same bargain the answer tiles strike: nothing here scrolls, so a drag
+     that starts on a tile belongs to the tile and not to the browser's pan */
+  touch-action: manipulation;
+  touch-action: pinch-zoom;
+}
+.tile.two { font-size: 1.6rem; }
+.tile.roman { font-size: 1.35rem; font-weight: 650; letter-spacing: .03em; }
+@media (hover: hover) { .tile:hover:not(:disabled) { border-color: var(--indigo); } }
+.tile:active:not(:disabled) { transform: scale(.97); }
+.tile.used {
+  opacity: .28;
+  background: transparent;
+  border-style: dashed;
+}
+.tile.wrong {
+  background: var(--bad-soft);
+  border-color: var(--seal);
+  color: var(--seal);
+  animation: shake .3s;
+}
+.tile:disabled { cursor: default; }

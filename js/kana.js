@@ -68,3 +68,16 @@ export const CHEERS = [
   "ばんざい",    // hooray
   "ひとやすみ",  // a breather
 ];
+// Every character the course teaches, against its reading. Built from the
+// groups above rather than written out again, so the two cannot drift apart.
+export const READINGS = new Map();
+for (const s of Object.values(SCRIPTS)) {
+  for (const g of s.groups) {
+    for (const c of g.cards) READINGS.set(c.k, c.r);
+  }
+}
+
+// The long mark. It is not a character with a reading of its own — it holds
+// the vowel of whatever came before it — so it is not something the drill can
+// teach as a card, and reading practice is the only place it can be met.
+export const CHOON = "ー";

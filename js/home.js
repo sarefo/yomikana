@@ -3,16 +3,18 @@
 // direction all of it is about.
 
 import { DISPLAY, MARK_AT, SCRIPTS } from "./kana.js";
-import { MAX_LEVEL, LEARNED_AT } from "./config.js";
+import { MAX_LEVEL, LEARNED_AT, READING_UNLOCK } from "./config.js";
 import {
   store, saveStore, script, dir, GROUPS, setScript, setDir,
   groupState, shareLevels,
 } from "./store.js";
 import { reviewDeck } from "./deck.js";
 import { startSession, REVIEW } from "./quiz.js";
+import { startReading, readingPool } from "./reading.js";
 
 const groupListEl = document.getElementById("groupList");
 const refreshEl = document.getElementById("refreshCard");
+const readEl = document.getElementById("readCard");
 
 function renderRefresh() {
   const deck = reviewDeck();
@@ -23,8 +25,8 @@ function renderRefresh() {
   for (const e of deck) if (e.refs[0][0] < MAX_LEVEL - 1) rusty++;
   const solid = total - rusty;
   refreshEl.classList.toggle("rusty", rusty > 0);
-  refreshEl.querySelector(".refresh-count").innerHTML = "<b>" + solid + "</b>/" + total;
-  refreshEl.querySelector(".refresh-sub").textContent = rusty
+  refreshEl.querySelector(".card-count").innerHTML = "<b>" + solid + "</b>/" + total;
+  refreshEl.querySelector(".card-sub").textContent = rusty
     ? rusty + (rusty === 1 ? " character wants" : " characters want") + " another look"
     : "all " + total + " are fresh — a round keeps them that way";
   refreshEl.querySelector(".refresh-bar > i").style.width = (100 * solid / total) + "%";
@@ -33,9 +35,27 @@ function renderRefresh() {
 }
 refreshEl.addEventListener("click", () => startSession(REVIEW));
 
+// Reading practice, offered once there is enough to read. Below that the pool
+// is four words deep and a session would be the same four over again, which
+// says "you are not ready for this" more clearly than hiding the card does.
+function renderReading() {
+  const pool = readingPool();
+  readEl.classList.toggle("hidden", pool.length < READING_UNLOCK);
+  if (pool.length < READING_UNLOCK) return;
+  const longest = pool.reduce((n, w) => Math.max(n, w.units.length), 0);
+  readEl.querySelector(".card-count").innerHTML = "<b>" + pool.length + "</b> readable";
+  readEl.querySelector(".card-sub").textContent = longest >= 5
+    ? "whole words and phrases, built one character at a time"
+    : "whole words, built one character at a time";
+  readEl.setAttribute("aria-label",
+    "Reading practice, " + pool.length + " words you can read");
+}
+readEl.addEventListener("click", startReading);
+
 export function renderHome() {
   shareLevels();
   renderRefresh();
+  renderReading();
   groupListEl.innerHTML = "";
   GROUPS.forEach((g, gi) => {
     const st = groupState(gi);
