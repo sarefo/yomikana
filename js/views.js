@@ -33,6 +33,17 @@ export function exitSession() {
   sessionEl.classList.add("hidden");
   homeEl.classList.remove("hidden");
   drawHome();
+  if (onIdle) { const f = onIdle; onIdle = null; f(); }
+}
+
+// Something that may only happen between sessions. A session holds state that
+// lives nowhere but this page — the question on the screen, how far into a word
+// the tiles have got — so anything that would discard it waits for the lessons
+// screen, where discarding it costs nothing.
+let onIdle = null;
+export function whenIdle(fn) {
+  if (sessionEl.classList.contains("hidden")) fn();
+  else onIdle = fn;
 }
 
 // Hidden on the screens that are not questions — a checkpoint offers its own

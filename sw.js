@@ -1,5 +1,5 @@
 "use strict";
-const CACHE = "yomikana-v18";
+const CACHE = "yomikana-v19";
 // Every file the app is made of, because a module the cache has never heard of
 // is a blank screen the first time the phone is offline: the page itself would
 // come back, ask for its imports, and get nothing. The list is kept by hand and
@@ -31,10 +31,14 @@ self.addEventListener("activate", e => {
     const stale = keys.filter(k => k !== CACHE && k.startsWith("yomikana-"));
     await Promise.all(stale.map(k => caches.delete(k)));
     await self.clients.claim();
-    // an upgrade, not a first install: whatever is on screen is the old build
+    // An upgrade, not a first install: whatever is on screen is the old build,
+    // and it should not stay that way. But reloading the page from here lands
+    // wherever the person happens to be — mid-question, three tiles into a word
+    // — and throws that away without a word of explanation. So the news is sent
+    // instead of acted on, and the page picks its own moment.
     if (stale.length) {
       const windows = await self.clients.matchAll({ type: "window" });
-      windows.forEach(w => { try { w.navigate(w.url); } catch (err) { /* client may refuse */ } });
+      windows.forEach(w => w.postMessage({ type: "upgraded" }));
     }
   })());
 });
